@@ -208,6 +208,69 @@ const RoadbookSheet = (function () {
           : `<b>${s.km}</b><small>km</small>`}<i>${gi === 0 ? "Depart " : "ETA "}${eta}</i></div>`;
   }
 
+  /* ---------------- weather strip ----------------
+     One reading per stop, at the hour you are scheduled to arrive there —
+     the only framing that helps on this route. The same day is 42°C at Adam
+     and 20°C in fog on the Aqabat descent, 400 km apart. */
+  function weatherRows(day, list, sch) {
+    const date = ROUTE.days[day].date;
+    return list.map((e, i) => ({
+      gi: e.gi,
+      name: e.s.name.split(" — ")[0].split(",")[0],
+      time: fmt(sch[i].arrive),
+      wx: RoadbookWeather.atStop(e.gi, date, sch[i].arrive)
+    }));
+  }
+
+  function wxShell(inner) {
+    return `<div class="wx"><div class="wxhd"><span>Weather along the route</span>
+      <span class="grow"></span>
+      <button class="btn ghost" id="wxGet">${navigator.onLine ? "Load" : "Offline"}</button></div>
+      ${inner}</div>`;
+  }
+
+  function renderWeather(day, list, sch) {
+    if (!RoadbookWeather.has()) {
+      return wxShell(`<p class="tiny muted" style="margin:8px 2px 0">${navigator.onLine
+        ? "Not loaded yet. Fetch it on wifi and it stays available for the drive."
+        : "No forecast stored. Connect once and it is kept on the device."}</p>`);
+    }
+    const rows = weatherRows(day, list, sch);
+    const got = rows.filter(r => r.wx);
+    if (!got.length) {
+      return wxShell(`<p class="tiny muted" style="margin:8px 2px 0">The stored forecast
+        doesn't cover ${ROUTE.days[day].date}. Forecasts reach about 16 days ahead.</p>`);
+    }
+    const temps = got.map(r => r.wx.temp);
+    const lo = Math.round(Math.min.apply(null, temps));
+    const hi = Math.round(Math.max.apply(null, temps));
+    const warns = RoadbookWeather.warnings(got);
+
+    return `<div class="wx">
+      <div class="wxhd">
+        <span>Weather along the route</span>
+        <b class="mono">${lo}°–${hi}°C</b>
+        <span class="grow"></span>
+        <span class="tiny muted">${navigator.onLine ? "" : "offline · "}${RoadbookWeather.age()}</span>
+        <button class="btn ghost" id="wxGet" aria-label="Refresh forecast">↻</button>
+      </div>
+      <div class="wxrow">
+        ${rows.filter(r => r.wx).map(r => `
+          <div class="wxc ${r.wx.vis != null && r.wx.vis < 1000 ? "bad" : ""}"
+               data-wxjump="${r.gi}" role="button" tabindex="0">
+            <b>${r.time}</b>
+            <i title="${esc(r.wx.label)}">${r.wx.glyph}</i>
+            <u>${Math.round(r.wx.temp)}°</u>
+            <em>feels ${Math.round(r.wx.feels)}°</em>
+            <span>${esc(r.name)}</span>
+            ${r.wx.vis != null && r.wx.vis < 2000 ? `<s>${Math.round(r.wx.vis)} m vis</s>` : ""}
+            ${r.wx.rain >= 30 ? `<s>${r.wx.rain}% rain</s>` : ""}
+          </div>`).join("")}
+      </div>
+      ${warns.map(w => `<div class="wxwarn ${w.level}">${esc(w.text)}</div>`).join("")}
+    </div>`;
+  }
+
   /* ---------------- day view ---------------- */
   function renderDay(day) {
     const list = dayList(day), sch = schedule(day), st = state[day];
@@ -215,7 +278,7 @@ const RoadbookSheet = (function () {
     const dep = parse(st.depart) ?? parse(meta.depart);
     const totalKm = list.reduce((t, e, i) => t + (i === 0 ? 0 : e.s.km), 0);
 
-    let h = `<div class="ctrl">
+    let h = renderWeather(day, list, sch) + `<div class="ctrl">
       <label for="dep-${day}">Depart</label>
       <input type="time" id="dep-${day}" value="${st.depart}">
       <button class="btn ghost" data-reset="${day}">Reset</button>
@@ -369,6 +432,34 @@ const RoadbookSheet = (function () {
       render();
     });
     $("#fmtBtn").addEventListener("click", () => { H12 = !H12; store.set("h12", H12); render(); });
+
+    const wxBtn = $("#wxGet");
+    if (wxBtn) wxBtn.addEventListener("click", () => {
+      wxBtn.disabled = true;
+      const was = wxBtn.textContent;
+      wxBtn.textContent = "…";
+      RoadbookWeather.refresh(true)
+        .then(render)
+        .catch(err => {
+          wxBtn.disabled = false;
+          wxBtn.textContent = was;
+          const hd = $(".wxhd");
+          if (hd) hd.insertAdjacentHTML("afterend",
+            `<p class="tiny muted" style="margin:8px 2px 0">Couldn't load: ${esc(err.message)}</p>`);
+        });
+    });
+
+    /* A weather chip is a way into the stop it describes. */
+    $$("[data-wxjump]").forEach(c => {
+      const go = () => {
+        const gi = +c.dataset.wxjump;
+        state.open[gi] = true; render(); focusStop(gi, true);
+      };
+      c.addEventListener("click", go);
+      c.addEventListener("keydown", ev => {
+        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); }
+      });
+    });
 
     $$("[data-toggle]").forEach(b => {
       const go = () => { const gi = +b.dataset.toggle; state.open[gi] = !state.open[gi]; render(); focusStop(gi); };
@@ -605,6 +696,14 @@ const RoadbookSheet = (function () {
     bindDrag();
     render();
     measure();
+
+    /* Warm the forecast in the background. A failure here is silent by
+       design: no network is the expected state for most of this trip, and
+       the strip already says so. */
+    RoadbookWeather.refresh().then(render).catch(() => {});
+    window.addEventListener("online", () => {
+      RoadbookWeather.refresh().then(render).catch(() => {});
+    });
     window.addEventListener("resize", measure);
     window.addEventListener("orientationchange", measure);
     return { snapTo, DET };

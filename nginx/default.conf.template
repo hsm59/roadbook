@@ -64,7 +64,7 @@ server {
     }
 
     # ---- app shell: revalidate, don't blind-cache -------------------------
-    location ~* ^/(index\.html|app\.js|precache\.js|route-data\.js|sheet\.js)$ {
+    location ~* ^/(index\.html|app\.js|precache\.js|route-data\.js|sheet\.js|weather\.js)$ {
         add_header Cache-Control "no-cache" always;
         add_header X-Content-Type-Options "nosniff" always;
         try_files $uri =404;

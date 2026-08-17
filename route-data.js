@@ -30,9 +30,9 @@ const ROUTE = {
   /* Day headers. Departure times are defaults; the UI lets you
      override them and remembers the override per device. */
   days: {
-    1: { label: "Day 1 · Tue 18 Aug", depart: "17:00",
+    1: { label: "Day 1 · Tue 18 Aug", depart: "17:00", date: "2026-08-18",
          blurb: "429 km, about 5 h driving plus roughly an hour and a quarter at the border. All of it after dark, so the only job is arriving with enough of the night left to sleep." },
-    2: { label: "Day 2 · Wed 19 Aug", depart: "04:30",
+    2: { label: "Day 2 · Wed 19 Aug", depart: "04:30", date: "2026-08-19",
          blurb: "880 km, about 9 h driving. Sunrise is near 05:45, so the first 75 minutes are dark. The 227 km between Haima and Qitbit is the longest gap without services on the whole route." }
   },
 

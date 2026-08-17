@@ -30,7 +30,7 @@ jobs:
       - name: Stage the runtime files
         run: |
           mkdir -p _site
-          cp index.html app.js sheet.js sw.js precache.js route-data.js _site/
+          cp index.html app.js sheet.js weather.js sw.js precache.js route-data.js _site/
           cp manifest.webmanifest icon.svg .nojekyll _site/
           cp -R vendor downloads _site/
 

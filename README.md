@@ -36,6 +36,7 @@ standalone app and keeps its caches.
 |---|---|
 | `index.html` | Shell, styles, service-worker registration |
 | `sheet.js` | The roadbook — a three-detent bottom sheet over the map |
+| `weather.js` | Per-stop forecast, read at your scheduled arrival hour |
 | `route-data.js` | Stops, route polyline, tile sources, zoom limits. Edit the stops by hand; the polyline is generated |
 | `tools/` | `route.config.json` + the two scripts that generate `ROUTE.line` from a router or a GPX |
 | `app.js` | Part 1 — map init, bounds, markers, popups, GPS |
@@ -96,6 +97,23 @@ expensive — buffer radius and zoom ceiling are.
 
 `MAX_ZOOM` is 15 — each extra level quadruples storage, and 15 is still enough to
 read a fuel station forecourt.
+
+## Weather
+
+A single figure for "today" is useless here. On 19 Aug the Aqabat descent is at
+100 m visibility at 07:00 and 12 km by 10:00, while Adam is 42°C at midday —
+same day, 400 km apart. So the forecast is fetched **per stop** and read at the
+hour the schedule puts you there. Change the departure time and every reading
+moves with it.
+
+Open-Meteo, keyless and CORS-enabled; all 13 stops come back in one request.
+Cached in `localStorage` (~16 KB) rather than the Cache API, so clearing tiles
+does not clear it. Offline, the last fetch is shown with its age stated.
+
+Thresholds live in `warnings()` in `weather.js`: visibility under 1 km, apparent
+temperature at or above 42°C, rain at or above 50%, wind at or above 40 km/h.
+They are tuned for a Gulf summer crossing — 45°C was too high to fire on a route
+whose hottest scheduled point is 44°C.
 
 ## Tile provider and terms
 

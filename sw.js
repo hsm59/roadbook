@@ -7,7 +7,7 @@
              option. Cleared only when the user asks.
    ============================================================ */
 
-const VERSION     = "v2";
+const VERSION     = "v3";
 const SHELL_CACHE = "roadbook-shell-" + VERSION;
 const TILE_CACHE  = "roadbook-tiles";        // intentionally unversioned
 
@@ -18,6 +18,7 @@ const SHELL_ASSETS = [
   "./precache.js",
   "./route-data.js",
   "./sheet.js",
+  "./weather.js",
   "./manifest.webmanifest",
   "./icon.svg",
   "./vendor/leaflet.js",

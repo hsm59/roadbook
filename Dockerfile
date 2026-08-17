@@ -15,7 +15,7 @@ FROM alpine:3.20 AS assets
 RUN apk add --no-cache gzip brotli
 WORKDIR /src
 
-COPY index.html app.js sw.js precache.js route-data.js sheet.js ./
+COPY index.html app.js sw.js precache.js route-data.js sheet.js weather.js ./
 COPY manifest.webmanifest icon.svg ./
 COPY vendor/ ./vendor/
 COPY downloads/ ./downloads/
