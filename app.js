@@ -38,19 +38,34 @@ const RoadbookMap = (function () {
     });
   }
 
-  function popupHtml(stop, index, total) {
-    const t = ROUTE.types[stop.type] || {};
-    const remaining = total - index;
+  /* A place is visited once on the way out and once on the way home, so the
+     popup describes the place and lists every visit rather than assuming one. */
+  function visitsTo(placeIndex) {
+    const out = [];
+    Object.keys(ROUTE.days).forEach(function (d) {
+      ROUTE.days[d].legs.forEach(function (leg) {
+        if (leg.at === placeIndex) out.push({ day: ROUTE.days[d], leg: leg });
+      });
+    });
+    return out;
+  }
+
+  function popupHtml(place, index) {
+    const t = ROUTE.types[place.type] || {};
+    const visits = visitsTo(index);
     return (
       '<div class="rb-pop">' +
-        '<div class="rb-pop-kicker">Day ' + stop.day + ' · ' + (t.label || stop.type) + '</div>' +
-        '<h3>' + index + '. ' + stop.name + '</h3>' +
-        '<p>' + (stop.note || "") + '</p>' +
-        '<div class="rb-pop-coord">' + stop.lat.toFixed(5) + ', ' + stop.lng.toFixed(5) + '</div>' +
+        '<div class="rb-pop-kicker">' + (t.label || place.type) + '</div>' +
+        '<h3>' + (index + 1) + '. ' + place.name + '</h3>' +
+        visits.map(function (v) {
+          return '<p class="rb-pop-visit"><b>' + v.day.tab + '</b> · ' + v.leg.sub +
+                 (v.leg.stay ? ' · ' + v.leg.stay + ' min' : '') + '</p>';
+        }).join("") +
+        '<div class="rb-pop-coord">' + place.lat.toFixed(5) + ', ' + place.lng.toFixed(5) + '</div>' +
         '<div class="rb-pop-links">' +
-          '<a href="geo:' + stop.lat + ',' + stop.lng + '?q=' + stop.lat + ',' + stop.lng +
-            '(' + encodeURIComponent(stop.name) + ')">Open in map app</a>' +
-          (remaining > 0 ? '<span>' + remaining + ' stops to go</span>' : '<span>Arrived</span>') +
+          '<a href="geo:' + place.lat + ',' + place.lng + '?q=' + place.lat + ',' + place.lng +
+            '(' + encodeURIComponent(place.name) + ')">Open in map app</a>' +
+          '<span>' + visits.length + (visits.length === 1 ? ' visit' : ' visits') + '</span>' +
         '</div>' +
       '</div>'
     );
@@ -59,15 +74,14 @@ const RoadbookMap = (function () {
   const markers = [];
   function addMarkers() {
     const group = L.layerGroup().addTo(map);
-    const total = ROUTE.stops.length - 1;
-    ROUTE.stops.forEach(function (stop, i) {
-      const m = L.marker([stop.lat, stop.lng], {
-        icon: markerIcon(stop.type, i + 1),
-        title: stop.name,
+    ROUTE.stops.forEach(function (place, i) {
+      const m = L.marker([place.lat, place.lng], {
+        icon: markerIcon(place.type, i + 1),
+        title: place.name,
         keyboard: true,
-        alt: stop.name
+        alt: place.name
       })
-        .bindPopup(popupHtml(stop, i + 1, total), { maxWidth: 280 })
+        .bindPopup(popupHtml(place, i), { maxWidth: 280 })
         .addTo(group);
       markers[i] = m;
     });

@@ -146,33 +146,54 @@ const RoadbookWeather = (function () {
     const out = [];
     const fog = rows.filter(r => r.wx && r.wx.vis != null && r.wx.vis < 1000);
     if (fog.length) {
-      const w = fog[0];
-      out.push({ level: "high", text:
+      const w = fog.reduce((a, b) => a.wx.vis < b.wx.vis ? a : b);
+      out.push({ level: "high", short: `fog ${Math.round(w.wx.vis)} m`, text:
         `Visibility ${Math.round(w.wx.vis)} m at ${w.name} around ${w.time}. ` +
         `Lights on, slow down, and add time rather than pushing through it.` });
     }
-    /* 42°C apparent, not 45: on the 18 Aug run the hottest point is 44°C at
-       the last UAE fuel stop and 41°C standing at the border for 45 minutes.
-       A threshold that misses that is a threshold that never fires. */
-    const hot = rows.filter(r => r.wx && r.wx.feels >= 42);
+    /* Two thresholds, because in dry desert air the apparent temperature runs
+       BELOW the actual one — Qitbit on 22 Aug is 45°C real but 40°C felt.
+       Keying on "feels like" alone would call that day clear. Air temperature
+       is what cooks the tyres and the coolant regardless of how it feels. */
+    const peakOf = r => Math.max(r.wx.feels, r.wx.temp);
+    const hot = rows.filter(r => r.wx && (r.wx.feels >= 42 || r.wx.temp >= 44));
     if (hot.length) {
-      const w = hot.reduce((a, b) => a.wx.feels > b.wx.feels ? a : b);
-      out.push({ level: "warn", text:
-        `Feels like ${Math.round(w.wx.feels)}°C at ${w.name} around ${w.time}. ` +
+      const w = hot.reduce((a, b) => peakOf(b) > peakOf(a) ? b : a);
+      const peak = Math.round(peakOf(w));
+      const how = w.wx.feels >= w.wx.temp ? `Feels like ${peak}°C` : `${peak}°C`;
+      out.push({ level: "warn", short: `${peak}°`, text:
+        `${how} at ${w.name} around ${w.time}. ` +
         `Tyre pressures rise in this heat and so does blowout risk — check them cold.` });
     }
     const wet = rows.filter(r => r.wx && r.wx.rain >= 50);
     if (wet.length) {
-      out.push({ level: "warn", text:
-        `Rain likely (${wet[0].wx.rain}%) around ${wet[0].name} at ${wet[0].time}.` });
+      const w = wet.reduce((a, b) => a.wx.rain > b.wx.rain ? a : b);
+      out.push({ level: "warn", short: `rain ${w.wx.rain}%`, text:
+        `Rain likely (${w.wx.rain}%) around ${w.name} at ${w.time}.` });
     }
     const windy = rows.filter(r => r.wx && r.wx.wind >= 40);
     if (windy.length) {
-      out.push({ level: "warn", text:
-        `Crosswinds near ${Math.round(windy[0].wx.wind)} km/h at ${windy[0].name}. ` +
+      const w = windy.reduce((a, b) => a.wx.wind > b.wx.wind ? a : b);
+      out.push({ level: "warn", short: `wind ${Math.round(w.wx.wind)}`, text:
+        `Crosswinds near ${Math.round(w.wx.wind)} km/h at ${w.name}. ` +
         `Blowing sand and unsteady high-sided traffic.` });
     }
     return out;
+  }
+
+  /* Range and the single most representative glyph for a set of readings —
+     the worst sky wins, since that is the one worth knowing about. */
+  function span(rows) {
+    const got = rows.filter(r => r.wx);
+    if (!got.length) return null;
+    const temps = got.map(r => r.wx.temp);
+    const worst = got.reduce((a, b) => (b.wx.code > a.wx.code ? b : a));
+    return {
+      lo: Math.round(Math.min.apply(null, temps)),
+      hi: Math.round(Math.max.apply(null, temps)),
+      glyph: worst.wx.glyph,
+      label: worst.wx.label
+    };
   }
 
   function age() {
@@ -185,7 +206,7 @@ const RoadbookWeather = (function () {
   }
 
   return {
-    refresh, atStop, warnings, age, describe,
+    refresh, atStop, warnings, span, age, describe,
     has: () => !!data,
     fetchedAt: () => (data ? data.fetched : null)
   };

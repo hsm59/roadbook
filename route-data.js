@@ -9,31 +9,181 @@
    straight-line GPX after the map had been given real road
    geometry. One list now, read by everything.
 
-   Per-stop fields:
-     name/sub    heading and its kicker
-     lat/lng     position
-     type        key into ROUTE.types — colour and glyph
-     day         1 or 2
-     km          road distance from the previous stop, from the
-                 router (tools/route.config.json), not estimated
-     drive/stay  minutes; planning figures, edit freely
-     fuel        drives the fuel-gap warnings
-     svc         service chips
-     note        why the stop matters
-     lm          how you will know you have arrived
+   PLACES vs LEGS. The return drives the same road backwards, so
+   every place is visited twice. Keeping one flat list of stops
+   would put two markers on each coordinate and label the borders
+   wrongly — Mezyad is the UAE exit going out and the UAE entry
+   coming back. So:
+
+     stops[]          the 13 physical places. Name, position and
+                      marker type. One marker each, whichever days
+                      pass through. Also what precache.js buffers
+                      and what weather.js asks the forecast for.
+
+     days[n].legs[]   one visit to a place on one day, in order:
+       at             index into stops[]
+       sub            kicker under the name — the role on THIS day
+       type           optional; overrides the marker type for the
+                      card only (Nizwa is a hotel outbound, a lunch
+                      stop inbound)
+       km             road distance from the previous leg, from the
+                      router (tools/route.config.json), not estimated
+       drive/stay     minutes; planning figures, edit freely
+       fuel           drives the fuel-gap warnings
+       svc            service chips
+       note           why this stop matters, in this direction
+       lm             how you will know you have arrived, in this
+                      direction — landmarks pass on the other side
+                      of the car on the way home
+
+   Adding a day means adding a days[] entry. Nothing else changes.
    ============================================================ */
 
 const ROUTE = {
-  name: "Dubai → Salalah",
-  dates: "18–19 Aug 2026",
+  name: "Dubai → Salalah → Dubai",
+  dates: "18–23 Aug 2026",
 
   /* Day headers. Departure times are defaults; the UI lets you
-     override them and remembers the override per device. */
+     override them and remembers the override per device.
+     20–21 Aug are in Salalah and not planned yet — add them here
+     when they are, and the tabs and weather pick them up. */
   days: {
-    1: { label: "Day 1 · Tue 18 Aug", depart: "17:00", date: "2026-08-18",
-         blurb: "429 km, about 5 h driving plus roughly an hour and a quarter at the border. All of it after dark, so the only job is arriving with enough of the night left to sleep." },
-    2: { label: "Day 2 · Wed 19 Aug", depart: "04:30", date: "2026-08-19",
-         blurb: "880 km, about 9 h driving. Sunrise is near 05:45, so the first 75 minutes are dark. The 227 km between Haima and Qitbit is the longest gap without services on the whole route." }
+    1: { label: "Tue 18 Aug", tab: "Tue 18", date: "2026-08-18", depart: "17:00",
+         leg: "Dubai → Nizwa",
+         blurb: "429 km, about 5 h driving plus roughly an hour and a quarter at the border. All of it after dark, so the only job is arriving with enough of the night left to sleep.",
+         legs: [
+      { at:0, sub:"Departure", km:0, drive:0, stay:0, fuel:false,
+        svc:["Fill up here"],
+        note:"Leave with a full tank. UAE petrol is cheaper than anything you'll buy in a hurry later, and the first 160 km is the last stretch of road you actually know.",
+        lm:"Dubai–Al Ain Road (E66) via E311. At 17:00 on a Tuesday expect 20–30 minutes of crawl before it thins out past Dubai Outlet Mall." },
+      { at:1, sub:"4 km before Mezyad", km:169, drive:115, stay:20, fuel:true,
+        svc:["Fuel","Washroom","Food","Insurance"],
+        note:"Last UAE-priced fuel and the last genuinely clean washroom until Ibri, two hours on. If you haven't bought Oman motor cover — the orange card — buy it here or at the Hafeet kiosk, roughly AED 150 for 10 days. Cars without it get turned back.",
+        lm:"Jebel Hafeet is the long ridge ahead and right. Once the mountain fills the windscreen on a palm-lined approach road, the border is minutes away." },
+      { at:2, sub:"UAE exit", km:4, drive:10, stay:20, fuel:false,
+        svc:["Exit fee AED 35"],
+        note:"AED 35 per person. Keep passports, Emirates IDs, the physical mulkiya and the insurance printout in one pouch — digging through the glovebox at the window is what makes the queue long.",
+        lm:"Trucks filter right, cars left. Open 24 hours." },
+      { at:3, sub:"Oman entry", km:2, drive:5, stay:45, fuel:false,
+        svc:["Visa","Customs","Insurance kiosk"],
+        note:"Park and walk into the hall for the visa and stamp. Bring a credit card — several counters refuse cash. Budget 45 minutes; a Tuesday night can be 30, a weekend can be two hours.",
+        lm:"You're on Route 21 south now. Buraimi's lights sit left for a few minutes, then it goes dark and stays dark." },
+      { at:4, sub:"Oman Oil / Shell", km:126, drive:80, stay:20, fuel:true,
+        svc:["Fuel","Washroom","Food","ATM","SIM cards"],
+        note:"First real stop inside Oman and the point where the drive starts to feel long. Shops on site sell Omantel and Ooredoo SIMs — worth it, since UAE roaming gets patchy from Haima onward.",
+        lm:"Ibri announces itself with a large lit roundabout. Oman Oil sits right just past it, HSBC alongside. Take the inner right lane after the roundabout." },
+      { at:5, sub:"Intercity Hotel — overnight", km:128, drive:95, stay:0, fuel:false,
+        svc:["Bed","Parking"],
+        note:"Intercity Hotel Nizwa at Firq is the pick — it sits where Route 31 starts heading south, so you rejoin the highway in under two minutes in the morning. Tell reception you're a pre-dawn checkout so parking and keys are sorted the night before.",
+        lm:"Bahla's long mud-brick wall and the floodlit fort pass on your right about 40 minutes out. Then Jabreen signs, then the Firq traffic lights — that's your turn." }
+    ] },
+
+    2: { label: "Wed 19 Aug", tab: "Wed 19", date: "2026-08-19", depart: "04:30",
+         leg: "Nizwa → Salalah",
+         blurb: "880 km, about 9 h driving. Sunrise is near 05:45, so the first 75 minutes are dark. The 227 km between Haima and Qitbit is the longest gap without services on the whole route.",
+         legs: [
+      { at:5, sub:"Departure", km:0, drive:0, stay:0, fuel:false,
+        svc:["Water","Snacks"],
+        note:"Eat in the car rather than sitting down — make Adam your first proper stop. Load two litres of water per person before you leave; the hotel is easier than any station on this road.",
+        lm:"Firq lights, then Route 31 south. Signs read Adam and Salalah." },
+      { at:6, sub:"Shell, Route 31", km:59, drive:45, stay:15, fuel:true,
+        svc:["Fuel — fill FULL","Washroom","Bakery","ATM","Mosque","Tyre air"],
+        note:"The last real town. Fill completely even at three-quarters, check tyre pressures, use the toilet, buy more water than you think you need. What follows is functional but sparse.",
+        lm:"Large roundabout with palm greenery both sides, Shell on the highway with two ATMs and a mosque. Last date palms until Salalah." },
+      { at:7, sub:"Al Maha station", km:122, drive:75, stay:15, fuel:true,
+        svc:["Fuel","Washroom (rough)","Grocery"],
+        note:"A stretch-and-top-up rather than a real break. Washrooms are poor and have been reported with no running water. It sits off the new carriageway and is genuinely easy to miss — access is via an underpass at 21.3830, 57.2581, not the route a map will draw.",
+        lm:"You're in the Qarn Al Alam oil field; at night you can see gas flares and PDO installations off to the sides. No street lights for 30 km after Adam, then only reflectors." },
+      { at:8, sub:"Shell — halfway", km:200, drive:115, stay:30, fuel:true,
+        svc:["Fuel — fill FULL","Clean washroom","Restaurants","Mosque","ATM","Garage"],
+        note:"The proper halfway point and the best facilities on the leg — restaurants, coffee, clean toilets, a bank, a garage if something's gone wrong. Take the full 30 minutes: get out, walk, eat properly. This stop decides whether the second half is safe. Fill FULL — the next 227 km is the longest gap of the trip.",
+        lm:"Only real settlement for hundreds of kilometres — water tower, bus station, mosque. The Duqm road branches east here. Shortly after, dual carriageway becomes single, shared with oncoming traffic." },
+      { at:9, sub:"Shell + motel", km:227, drive:130, stay:25, fuel:true,
+        svc:["Fuel","Family washroom","Restaurants","Mosque","Tyre repair"],
+        note:"Shell one side, a motel with restaurants and a family washroom the other. The motel side is cleaner and has a proper ladies' area — worth the extra walk. Long-distance buses break here for the same reason.",
+        lm:"After Haima the road runs dead straight for two hours with lay-bys every 10 km. Qitbit is a small cluster of low buildings either side — a mosque and a Shell canopy, and that's it." },
+      { at:10, sub:"Shell — last fuel", km:195, drive:115, stay:20, fuel:true,
+        svc:["Fuel","Washroom","Restaurants","Mosque","ATM"],
+        note:"Last fuel before the mountain descent and the point where the weather changes. Check pressures again and clear the windscreen properly. If anyone is drowsy this is the last sensible place to swap drivers or sleep 20 minutes.",
+        lm:"Gravel turns reddish and you pass airbase fencing on the approach. Town has a large Shell and an Oman Oil, plus a bank and bakeries." },
+      { at:11, sub:"Descent", km:31, drive:25, stay:0, fuel:false,
+        svc:["Scenic","Fog likely","Lights on"],
+        note:"About 25 km after Thumrait the plateau tips into the Qara mountains and everything turns green. Khareef fog, drizzle, slow trucks and camels in the lane. Slow down and add half an hour if visibility closes in — no arrival time is worth pushing through 100 m visibility on a mountain road.",
+        lm:"The temperature drops and the windscreen mists in August. Escarpment on both sides, crawler lanes for trucks, and the first green you have seen since Dubai." },
+      { at:12, sub:"Arrival", km:46, drive:40, stay:0, fuel:false,
+        svc:["Arrived"],
+        note:"You should be checking in in daylight with hours to spare. If the fog was thick on the descent you will be later than planned, and that is the right trade.",
+        lm:"Hamrair roundabout marks the edge of town." }
+    ] },
+
+    /* ---- return ---- */
+    3: { label: "Sat 22 Aug", tab: "Sat 22", date: "2026-08-22", depart: "14:00",
+         leg: "Salalah → Haima",
+         blurb: "499 km, about 5 h 10 m driving. A deliberately short first half of the return: a 14:00 start puts the mountain climb in daylight and leaves the long empty stretch to Haima for the evening. Sunset is near 18:40, so the last two hours are dark.",
+         legs: [
+      { at:12, sub:"Departure", km:0, drive:0, stay:0, fuel:false,
+        svc:["Fill up here","Water"],
+        note:"Fill in Salalah before you climb. Fuel is cheaper and easier here than anywhere until Haima, and you want a full tank going onto the plateau. Load water for two days, not one — tomorrow is the long day.",
+        lm:"Head north out of town for the Thumrait road; signs read Thumrait and Muscat." },
+      { at:11, sub:"Ascent", km:46, drive:40, stay:0, fuel:false,
+        svc:["Scenic","Fog likely","Lights on"],
+        note:"The descent in reverse, and it is the harder direction: you are climbing into the cloud rather than dropping out of it, behind trucks that are slow uphill. Khareef fog can sit on this escarpment all afternoon in August. Lights on, hold your lane and do not overtake into grey.",
+        lm:"Green hills close in and the temperature drops several degrees within a few kilometres. Once the road levels out and the green stops abruptly, you are on the plateau." },
+      { at:10, sub:"First fuel on the plateau", km:31, drive:25, stay:20, fuel:true,
+        svc:["Fuel — fill FULL","Washroom","Restaurants","Mosque","ATM"],
+        note:"First services after the climb and the last town of any size before Haima. Fill completely — from here it is 195 km to Qitbit and another 227 km to Haima. Check tyre pressures again now the tyres are hot from the climb.",
+        lm:"Airbase fencing on the way in, then a large Shell and an Oman Oil. The gravel goes back to pale after the reddish stretch by the mountains." },
+      { at:9, sub:"Shell + motel", km:195, drive:115, stay:25, fuel:true,
+        svc:["Fuel","Family washroom","Restaurants","Mosque","Tyre repair"],
+        note:"Same pair of stations as on the way down: Shell one side, motel the other, motel side cleaner. Eat here rather than at Haima — you will be arriving at Haima in the dark and wanting to stop, not to queue.",
+        lm:"A cluster of low buildings either side of a dead-straight road, mosque and Shell canopy. Easy to overshoot at night." },
+      { at:8, sub:"Overnight", km:227, drive:130, stay:0, fuel:true,
+        svc:["Bed","Fuel","Restaurants","Clean washroom","Garage"],
+        note:"Overnight at Haima. Book ahead — the rest houses here are small and this is the only real accommodation for hundreds of kilometres, so turning up and hoping is not a plan. Fill the tank tonight rather than in the morning; it saves a stop on a 810 km day.",
+        lm:"The water tower and the bus station are the landmarks. The Duqm road joins from the east just before town." }
+    ] },
+
+    4: { label: "Sun 23 Aug", tab: "Sun 23", date: "2026-08-23", depart: "05:00",
+         leg: "Haima → Dubai",
+         blurb: "810 km, about 9 h driving plus the border. The longest day of the whole trip, so it starts early: a 05:00 departure puts you at the border mid-afternoon and home before the evening Dubai traffic. Sunrise is near 05:45.",
+         legs: [
+      { at:8, sub:"Departure", km:0, drive:0, stay:0, fuel:false,
+        svc:["Fill up here","Water","Coffee"],
+        note:"Leave with a full tank and more water than you think you need — the first 200 km to Ghaba has nothing. If you did not fill last night, do it now before you join the road.",
+        lm:"North on Route 31, signs for Adam and Nizwa. Single carriageway shared with oncoming traffic for the first stretch, then it doubles." },
+      { at:7, sub:"Al Maha station", km:200, drive:115, stay:15, fuel:true,
+        svc:["Fuel","Washroom (rough)","Grocery"],
+        note:"Same easy-to-miss station as on the way down, and just as poor. Northbound the underpass access is on the other side of the carriageway — slow down early rather than braking late. A top-up and a stretch, nothing more.",
+        lm:"Gas flares and PDO installations of the Qarn Al Alam field either side. If you reach unbroken empty desert again you have passed it." },
+      { at:6, sub:"Shell, Route 31", km:122, drive:75, stay:15, fuel:true,
+        svc:["Fuel","Washroom","Bakery","ATM","Mosque","Tyre air"],
+        note:"Back into inhabited Oman: the date palms return here. Good washrooms and a bakery, and the last easy fuel before Nizwa. Check pressures — this is roughly the midpoint of the day's heat.",
+        lm:"Large roundabout with palm greenery on both sides, Shell on the highway." },
+      { at:5, type:"fuel", sub:"Lunch stop", km:59, drive:45, stay:20, fuel:false,
+        svc:["Food","Washroom","Fuel","ATM"],
+        note:"Not the hotel this time — just the natural place to eat properly before the last long push. Firq and Nizwa have plenty of options right by the highway, so you do not need to drive into town. If you are running early, Nizwa fort and the souq are twenty minutes off the road.",
+        lm:"The Firq traffic lights where you turned south on day 2, taken the other way." },
+      { at:4, sub:"Oman Oil / Shell", km:128, drive:95, stay:20, fuel:true,
+        svc:["Fuel","Washroom","Food","ATM"],
+        note:"Last proper stop before the border. Fill here — you want to cross with a decent tank and you do not want to be looking for fuel on the Buraimi side. Spend any remaining small Omani notes now.",
+        lm:"The big lit roundabout again, approached from the south this time; Oman Oil is on your left as you come in." },
+      { at:3, sub:"Oman exit", km:126, drive:80, stay:45, fuel:false,
+        svc:["Passport stamp","Customs"],
+        note:"Roles reverse on the way home: Hafeet is now the Oman EXIT and Mezyad is the UAE entry. Get the exit stamp here for everyone in the car. Budget 45 minutes; a Sunday afternoon is usually lighter than a weekend. Check current exit charges at the counter — they change, and I have not verified this year's.",
+        lm:"Route 21 north through Buraimi, then the border complex. Trucks filter separately from cars." },
+      { at:2, sub:"UAE entry", km:2, drive:5, stay:20, fuel:false,
+        svc:["Passport / Emirates ID","Vehicle check"],
+        note:"UAE entry. Residents re-enter on passport plus Emirates ID; keep the mulkiya to hand as the vehicle is checked back in. Same pouch discipline as on the way out — everything in one place before you reach the window.",
+        lm:"Jebel Hafeet fills the windscreen again, this time behind you as you clear the post." },
+      { at:1, sub:"First UAE fuel", km:4, drive:10, stay:15, fuel:true,
+        svc:["Fuel","Washroom","Food"],
+        note:"First UAE-priced fuel and a clean washroom. Worth filling here even if you have half a tank — it is cheaper than anything nearer Dubai, and it makes the last two hours a single run.",
+        lm:"The palm-lined approach road, taken northbound." },
+      { at:0, sub:"Home", km:169, drive:115, stay:0, fuel:false,
+        svc:["Arrived"],
+        note:"E66 back into Dubai. Arriving mid-afternoon on a Sunday you miss the worst of it; leave it until the evening and the last 40 km takes as long as the previous 150. Check tyre pressures again in the next day or two — they have had a hard week.",
+        lm:"Dubai Outlet Mall, then the E311 interchange, then home." }
+    ] }
   },
 
   /* Marker types drive the icon colour and glyph. Add freely. */
@@ -46,86 +196,22 @@ const ROUTE = {
     finish:  { color: "#E0574A", glyph: "★", label: "Destination" }
   },
 
+  /* The 13 physical places. One marker each, whichever days pass
+     through. Everything about a particular visit lives in a leg. */
   stops: [
-    { name:"Al Nahda 1, Dubai", sub:"Departure", lat:25.2930, lng:55.3650,
-      type:"start", day:1, km:0, drive:0, stay:0, fuel:false,
-      svc:["Fill up here"],
-      note:"Leave with a full tank. UAE petrol is cheaper than anything you'll buy in a hurry later, and the first 160 km is the last stretch of road you actually know.",
-      lm:"Dubai–Al Ain Road (E66) via E311. At 17:00 on a Tuesday expect 20–30 minutes of crawl before it thins out past Dubai Outlet Mall." },
-
-    { name:"Last UAE fuel", sub:"4 km before Mezyad", lat:24.0450, lng:55.8300,
-      type:"fuel", day:1, km:169, drive:115, stay:20, fuel:true,
-      svc:["Fuel","Washroom","Food","Insurance"],
-      note:"Last UAE-priced fuel and the last genuinely clean washroom until Ibri, two hours on. If you haven't bought Oman motor cover — the orange card — buy it here or at the Hafeet kiosk, roughly AED 150 for 10 days. Cars without it get turned back.",
-      lm:"Jebel Hafeet is the long ridge ahead and right. Once the mountain fills the windscreen on a palm-lined approach road, the border is minutes away." },
-
-    { name:"Mezyad Border Post", sub:"UAE exit", lat:24.0231623, lng:55.8462712,
-      type:"border", day:1, km:4, drive:10, stay:20, fuel:false,
-      svc:["Exit fee AED 35"],
-      note:"AED 35 per person. Keep passports, Emirates IDs, the physical mulkiya and the insurance printout in one pouch — digging through the glovebox at the window is what makes the queue long.",
-      lm:"Trucks filter right, cars left. Open 24 hours." },
-
-    { name:"Hafeet Border Post", sub:"Oman entry", lat:24.0128417, lng:55.8482115,
-      type:"border", day:1, km:2, drive:5, stay:45, fuel:false,
-      svc:["Visa","Customs","Insurance kiosk"],
-      note:"Park and walk into the hall for the visa and stamp. Bring a credit card — several counters refuse cash. Budget 45 minutes; a Tuesday night can be 30, a weekend can be two hours.",
-      lm:"You're on Route 21 south now. Buraimi's lights sit left for a few minutes, then it goes dark and stays dark." },
-
-    { name:"Ibri", sub:"Oman Oil / Shell", lat:23.2163282, lng:56.4925148,
-      type:"fuel", day:1, km:126, drive:80, stay:20, fuel:true,
-      svc:["Fuel","Washroom","Food","ATM","SIM cards"],
-      note:"First real stop inside Oman and the point where the drive starts to feel long. Shops on site sell Omantel and Ooredoo SIMs — worth it, since UAE roaming gets patchy from Haima onward.",
-      lm:"Ibri announces itself with a large lit roundabout. Oman Oil sits right just past it, HSBC alongside. Take the inner right lane after the roundabout." },
-
-    { name:"Nizwa — Intercity Hotel", sub:"Overnight", lat:22.8735362, lng:57.5363993,
-      type:"hotel", day:1, km:128, drive:95, stay:0, fuel:false,
-      svc:["Bed","Parking"],
-      note:"Intercity Hotel Nizwa at Firq is the pick — it sits where Route 31 starts heading south, so you rejoin the highway in under two minutes in the morning. Tell reception you're a pre-dawn checkout so parking and keys are sorted the night before.",
-      lm:"Bahla's long mud-brick wall and the floodlit fort pass on your right about 40 minutes out. Then Jabreen signs, then the Firq traffic lights — that's your turn." },
-
-    /* Day 2 departs from the Nizwa hotel above — it is day 1's arrival and
-       day 2's origin, so it is listed once and the schedule starts there. */
-    { name:"Adam", sub:"Shell, Route 31", lat:22.3946927, lng:57.5147239,
-      type:"fuel", day:2, km:59, drive:45, stay:15, fuel:true,
-      svc:["Fuel — fill FULL","Washroom","Bakery","ATM","Mosque","Tyre air"],
-      note:"The last real town. Fill completely even at three-quarters, check tyre pressures, use the toilet, buy more water than you think you need. What follows is functional but sparse.",
-      lm:"Large roundabout with palm greenery both sides, Shell on the highway with two ATMs and a mosque. Last date palms until Salalah." },
-
-    { name:"Ghaba — Al Maha", sub:"Al Maha station", lat:21.3789567, lng:57.2538543,
-      type:"fuel", day:2, km:122, drive:75, stay:15, fuel:true,
-      svc:["Fuel","Washroom (rough)","Grocery"],
-      note:"A stretch-and-top-up rather than a real break. Washrooms are poor and have been reported with no running water. It sits off the new carriageway and is genuinely easy to miss — access is via an underpass at 21.3830, 57.2581, not the route a map will draw.",
-      lm:"You're in the Qarn Al Alam oil field; at night you can see gas flares and PDO installations off to the sides. No street lights for 30 km after Adam, then only reflectors." },
-
-    { name:"Haima", sub:"Shell — halfway", lat:19.9567873, lng:56.2758961,
-      type:"fuel", day:2, km:200, drive:115, stay:30, fuel:true,
-      svc:["Fuel — fill FULL","Clean washroom","Restaurants","Mosque","ATM","Garage"],
-      note:"The proper halfway point and the best facilities on the leg — restaurants, coffee, clean toilets, a bank, a garage if something's gone wrong. Take the full 30 minutes: get out, walk, eat properly. This stop decides whether the second half is safe. Fill FULL — the next 227 km is the longest gap of the trip.",
-      lm:"Only real settlement for hundreds of kilometres — water tower, bus station, mosque. The Duqm road branches east here. Shortly after, dual carriageway becomes single, shared with oncoming traffic." },
-
-    { name:"Qitbit", sub:"Shell + motel", lat:19.1760410, lng:54.5019967,
-      type:"fuel", day:2, km:227, drive:130, stay:25, fuel:true,
-      svc:["Fuel","Family washroom","Restaurants","Mosque","Tyre repair"],
-      note:"Shell one side, a motel with restaurants and a family washroom the other. The motel side is cleaner and has a proper ladies' area — worth the extra walk. Long-distance buses break here for the same reason.",
-      lm:"After Haima the road runs dead straight for two hours with lay-bys every 10 km. Qitbit is a small cluster of low buildings either side — a mosque and a Shell canopy, and that's it." },
-
-    { name:"Thumrait", sub:"Shell — last fuel", lat:17.6107190, lng:54.0354019,
-      type:"fuel", day:2, km:195, drive:115, stay:20, fuel:true,
-      svc:["Fuel","Washroom","Restaurants","Mosque","ATM"],
-      note:"Last fuel before the mountain descent and the point where the weather changes. Check pressures again and clear the windscreen properly. If anyone is drowsy this is the last sensible place to swap drivers or sleep 20 minutes.",
-      lm:"Gravel turns reddish and you pass airbase fencing on the approach. Town has a large Shell and an Oman Oil, plus a bank and bakeries." },
-
-    { name:"Aqabat descent", sub:"Qara mountains", lat:17.3500000, lng:54.0700000,
-      type:"scenic", day:2, km:31, drive:25, stay:0, fuel:false,
-      svc:["Scenic","Fog likely","Lights on"],
-      note:"About 25 km after Thumrait the plateau tips into the Qara mountains and everything turns green. Khareef fog, drizzle, slow trucks and camels in the lane. Slow down and add half an hour if visibility closes in — no arrival time is worth pushing through 100 m visibility on a mountain road.",
-      lm:"The temperature drops and the windscreen mists in August. Escarpment on both sides, crawler lanes for trucks, and the first green you have seen since Dubai." },
-
-    { name:"Salalah Beach Resort", sub:"Arrival", lat:17.0088533, lng:54.1576577,
-      type:"finish", day:2, km:46, drive:40, stay:0, fuel:false,
-      svc:["Arrived"],
-      note:"You should be checking in in daylight with hours to spare. If the fog was thick on the descent you will be later than planned, and that is the right trade.",
-      lm:"Hamrair roundabout marks the edge of town." }
+    { name:"Al Nahda 1, Dubai",      lat:25.2930,    lng:55.3650,    type:"start"  },
+    { name:"Last UAE fuel",          lat:24.0450,    lng:55.8300,    type:"fuel"   },
+    { name:"Mezyad Border Post",     lat:24.0231623, lng:55.8462712, type:"border" },
+    { name:"Hafeet Border Post",     lat:24.0128417, lng:55.8482115, type:"border" },
+    { name:"Ibri",                   lat:23.2163282, lng:56.4925148, type:"fuel"   },
+    { name:"Nizwa (Firq)",           lat:22.8735362, lng:57.5363993, type:"hotel"  },
+    { name:"Adam",                   lat:22.3946927, lng:57.5147239, type:"fuel"   },
+    { name:"Ghaba — Al Maha",        lat:21.3789567, lng:57.2538543, type:"fuel"   },
+    { name:"Haima",                  lat:19.9567873, lng:56.2758961, type:"fuel"   },
+    { name:"Qitbit",                 lat:19.1760410, lng:54.5019967, type:"fuel"   },
+    { name:"Thumrait",               lat:17.6107190, lng:54.0354019, type:"fuel"   },
+    { name:"Aqabat",                 lat:17.3500000, lng:54.0700000, type:"scenic" },
+    { name:"Salalah Beach Resort",   lat:17.0088533, lng:54.1576577, type:"finish" }
   ],
 
   /* Checklists, surfaced in the Prep tab. */

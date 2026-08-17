@@ -10,7 +10,12 @@
    pointer-based so it works with a mouse as well as a thumb, and
    the handle is a button, so it works with neither.
 
-   Depends on: route-data.js, app.js (RoadbookMap), precache.js
+   A stop is identified by "<day>:<legIndex>", not by place: the
+   return visits every place a second time, and marking Haima done
+   on the way south must not tick it off on the way home.
+
+   Depends on: route-data.js, app.js (RoadbookMap), precache.js,
+   weather.js
    ============================================================ */
 
 const RoadbookSheet = (function () {
@@ -55,49 +60,56 @@ const RoadbookSheet = (function () {
   };
   const compass = d => ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"][Math.round(d / 22.5) % 16];
 
-  /* ---------------- trip indexing ----------------
-     Day 2 starts from the Nizwa hotel, which is day 1's arrival.
-     It is one stop in the data and appears as the origin of day 2's
-     timeline, so a day list is not simply a filter. */
+  /* ---------------- trip indexing ---------------- */
+  const DAYS = Object.keys(ROUTE.days).map(Number).sort((a, b) => a - b);
+
+  /* A leg joined to the place it visits. `key` is the stable identity used
+     for done/open state; `gi` is the place, which the map and forecast use. */
   function dayList(day) {
-    const out = [];
-    ROUTE.stops.forEach((s, gi) => { if (s.day === day) out.push({ s, gi }); });
-    if (day === 2) {
-      let originGi = -1;
-      ROUTE.stops.forEach((s, gi) => { if (s.day === 1) originGi = gi; });
-      if (originGi >= 0) out.unshift({ s: ROUTE.stops[originGi], gi: originGi, origin: true });
-    }
-    return out;
+    return ROUTE.days[day].legs.map((l, i) => {
+      const p = ROUTE.stops[l.at];
+      return {
+        leg: l, i, day, gi: l.at, key: day + ":" + i,
+        name: p.name, lat: p.lat, lng: p.lng,
+        type: l.type || p.type
+      };
+    });
   }
 
   const state = {
-    1: { depart: store.get("d1_dep", ROUTE.days[1].depart), anchor: null },
-    2: { depart: store.get("d2_dep", ROUTE.days[2].depart), anchor: null },
+    depart: {}, anchor: {},
     open: {}, done: store.get("done", {}), sat: {}, satz: {},
-    tab: "d1"
+    tab: "d" + DAYS[0]
   };
+  DAYS.forEach(d => {
+    state.depart[d] = store.get("d" + d + "_dep", ROUTE.days[d].depart);
+    state.anchor[d] = null;
+  });
 
   function schedule(day) {
-    const list = dayList(day), st = state[day];
-    let t = parse(st.depart);
+    const list = dayList(day);
+    let t = parse(state.depart[day]);
     if (t === null) t = parse(ROUTE.days[day].depart);
     return list.map((e, i) => {
-      if (i > 0) t += e.s.drive;
-      if (st.anchor && st.anchor.gi === e.gi) t = st.anchor.t;
+      if (i > 0) t += e.leg.drive;
+      if (state.anchor[day] && state.anchor[day].key === e.key) t = state.anchor[day].t;
       const arrive = t;
-      t += e.s.stay;
+      t += e.leg.stay;
       return { arrive, leave: t };
     });
   }
   function kmRemaining(list, i) {
     let k = 0;
-    for (let j = i + 1; j < list.length; j++) k += list[j].s.km;
+    for (let j = i + 1; j < list.length; j++) k += list[j].leg.km;
     return k;
+  }
+  function dayKm(day) {
+    return ROUTE.days[day].legs.reduce((t, l) => t + l.km, 0);
   }
 
   /* ---------------- satellite tiles, cached in IndexedDB ----------------
      Deliberately not the Cache API bucket the basemap uses: these are
-     small per-stop grids the user downloads separately, and clearing
+     small per-place grids the user downloads separately, and clearing
      one should not clear the other. */
   const SAT = {
     url: (z, x, y) => `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/${z}/${y}/${x}`,
@@ -122,10 +134,10 @@ const RoadbookSheet = (function () {
         } catch (e) { res(fallback); }
       });
     },
-    get(k)      { return SAT.tx("readonly",  s => s.get(k), null); },
-    put(k, b)   { return SAT.tx("readwrite", s => s.put(b, k), null); },
-    clear()     { return SAT.tx("readwrite", s => s.clear(), null); },
-    count()     { return SAT.tx("readonly",  s => s.count(), 0); },
+    get(k)    { return SAT.tx("readonly",  s => s.get(k), null); },
+    put(k, b) { return SAT.tx("readwrite", s => s.put(b, k), null); },
+    clear()   { return SAT.tx("readwrite", s => s.clear(), null); },
+    count()   { return SAT.tx("readonly",  s => s.count(), 0); },
     tilesFor(lat, lng, z) {
       const cx = Math.floor(SAT.fx(lng, z)), cy = Math.floor(SAT.fy(lat, z)), out = [];
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++)
@@ -145,15 +157,16 @@ const RoadbookSheet = (function () {
     }
   };
 
-  async function paintSat(gi) {
-    const host = $("#sat-" + gi); if (!host) return;
-    const s = ROUTE.stops[gi], z = state.satz[gi] || 16;
-    const tiles = SAT.tilesFor(s.lat, s.lng, z);
+  async function paintSat(key) {
+    const host = $("#sat-" + CSS.escape(key)); if (!host) return;
+    const gi = +host.dataset.gi, p = ROUTE.stops[gi], z = state.satz[key] || 16;
+    const tiles = SAT.tilesFor(p.lat, p.lng, z);
     const grid = $(".satgrid", host);
     grid.innerHTML = tiles.map(t => `<img alt="" data-k="${t.k}" class="miss">`).join("");
-    const cx = Math.floor(SAT.fx(s.lng, z)), cy = Math.floor(SAT.fy(s.lat, z));
-    $(".xhair", host).style.left = ((SAT.fx(s.lng, z) - (cx - 1)) / 3 * 100).toFixed(2) + "%";
-    $(".xhair", host).style.top  = ((SAT.fy(s.lat, z) - (cy - 1)) / 3 * 100).toFixed(2) + "%";
+    const cx = Math.floor(SAT.fx(p.lng, z)), cy = Math.floor(SAT.fy(p.lat, z));
+    const xh = $(".xhair", host);
+    xh.style.left = ((SAT.fx(p.lng, z) - (cx - 1)) / 3 * 100).toFixed(2) + "%";
+    xh.style.top  = ((SAT.fy(p.lat, z) - (cy - 1)) / 3 * 100).toFixed(2) + "%";
     let got = 0;
     await Promise.all(tiles.map(async t => {
       const b = await SAT.fetchTile(t);
@@ -169,9 +182,9 @@ const RoadbookSheet = (function () {
 
   async function satDownloadAll(wide, onProg) {
     const list = [];
-    ROUTE.stops.forEach(s => {
-      SAT.tilesFor(s.lat, s.lng, 16).forEach(t => list.push(t));
-      if (wide) SAT.tilesFor(s.lat, s.lng, 13).forEach(t => list.push(t));
+    ROUTE.stops.forEach(p => {
+      SAT.tilesFor(p.lat, p.lng, 16).forEach(t => list.push(t));
+      if (wide) SAT.tilesFor(p.lat, p.lng, 13).forEach(t => list.push(t));
     });
     const seen = new Set();
     const uniq = list.filter(t => seen.has(t.k) ? false : (seen.add(t.k), true));
@@ -183,156 +196,159 @@ const RoadbookSheet = (function () {
     return { done, ok, total: uniq.length };
   }
 
-  /* ---------------- peek: the one thing you need while moving ---------------- */
-  function nextStop() {
-    for (let i = 0; i < ROUTE.stops.length; i++) if (!state.done[i]) return i;
-    return -1;
-  }
-  function renderPeek() {
-    const gi = nextStop(), el = $("#peekBody");
-    if (gi < 0) {
-      el.innerHTML = `<div class="pk-kick">Trip complete</div>
-        <div class="pk-name">Salalah<span class="pk-far">all 13 stops done</span></div>`;
-      return;
-    }
-    const s = ROUTE.stops[gi];
-    const list = dayList(s.day), sch = schedule(s.day);
-    const idx = list.findIndex(e => e.gi === gi && !e.origin);
-    const eta = idx >= 0 ? fmt(sch[idx].arrive) : "—";
-    el.innerHTML =
-      `<div class="pk-kick">Next · ${gi + 1} of ${ROUTE.stops.length} · Day ${s.day}</div>
-       <div class="pk-name">${esc(s.name)}
-         <span class="pk-far">${esc(s.sub)}</span></div>
-       <div class="pk-num">${gi === 0
-          ? "<b>Start</b>"
-          : `<b>${s.km}</b><small>km</small>`}<i>${gi === 0 ? "Depart " : "ETA "}${eta}</i></div>`;
-  }
-
-  /* ---------------- weather strip ----------------
-     One reading per stop, at the hour you are scheduled to arrive there —
-     the only framing that helps on this route. The same day is 42°C at Adam
-     and 20°C in fog on the Aqabat descent, 400 km apart. */
-  function weatherRows(day, list, sch) {
-    const date = ROUTE.days[day].date;
+  /* ---------------- weather ----------------
+     Read per stop at the hour the schedule puts you there. The same day is
+     42°C at Adam and 20°C in fog on the Aqabat, 400 km apart, so a single
+     figure for "today" would be worse than none. */
+  function weatherRows(day) {
+    const list = dayList(day), sch = schedule(day), date = ROUTE.days[day].date;
     return list.map((e, i) => ({
-      gi: e.gi,
-      name: e.s.name.split(" — ")[0].split(",")[0],
+      key: e.key, gi: e.gi, name: e.name,
       time: fmt(sch[i].arrive),
       wx: RoadbookWeather.atStop(e.gi, date, sch[i].arrive)
     }));
   }
 
-  function wxShell(inner) {
-    return `<div class="wx"><div class="wxhd"><span>Weather along the route</span>
-      <span class="grow"></span>
-      <button class="btn ghost" id="wxGet">${navigator.onLine ? "Load" : "Offline"}</button></div>
-      ${inner}</div>`;
+  function renderTripWeather(activeDay) {
+    if (!RoadbookWeather.has()) {
+      return `<div class="wx"><div class="wxhd"><span>Trip weather</span><span class="grow"></span>
+        <button class="btn ghost" id="wxGet">${navigator.onLine ? "Load" : "Offline"}</button></div>
+        <p class="tiny muted" style="margin:0 12px 10px">${navigator.onLine
+          ? "Not loaded yet. Fetch it on wifi and it stays on the device for the drive."
+          : "No forecast stored. Connect once and it is kept for the trip."}</p></div>`;
+    }
+    const rows = DAYS.map(d => {
+      const r = weatherRows(d).filter(x => x.wx);
+      return { day: d, meta: ROUTE.days[d], span: RoadbookWeather.span(r), warns: RoadbookWeather.warnings(r) };
+    });
+    const any = rows.some(r => r.span);
+    if (!any) {
+      return `<div class="wx"><div class="wxhd"><span>Trip weather</span><span class="grow"></span>
+        <button class="btn ghost" id="wxGet">Reload</button></div>
+        <p class="tiny muted" style="margin:0 12px 10px">The stored forecast doesn't reach these dates.
+        Forecasts run about 16 days ahead — reload closer to the trip.</p></div>`;
+    }
+    return `<div class="wx">
+      <div class="wxhd"><span>Trip weather</span><span class="grow"></span>
+        <span class="tiny muted">${navigator.onLine ? "" : "offline · "}${RoadbookWeather.age()}</span>
+        <button class="btn ghost" id="wxGet" aria-label="Refresh forecast">↻</button></div>
+      ${rows.map(r => {
+        const worst = r.warns[0];
+        return `<div class="wxday ${r.day === activeDay ? "on" : ""} ${worst && worst.level === "high" ? "bad" : ""}"
+                     data-wxday="${r.day}" role="button" tabindex="0">
+          <b>${esc(r.meta.tab)}</b>
+          <span>${esc(r.meta.leg)}</span>
+          ${r.span ? `<i>${r.span.glyph}</i><u>${r.span.lo}°–${r.span.hi}°</u>` : `<u class="muted">—</u>`}
+          ${worst ? `<s class="${worst.level}">${esc(worst.short)}</s>` : `<s class="ok">clear</s>`}
+        </div>`;
+      }).join("")}
+    </div>`;
   }
 
-  function renderWeather(day, list, sch) {
-    if (!RoadbookWeather.has()) {
-      return wxShell(`<p class="tiny muted" style="margin:8px 2px 0">${navigator.onLine
-        ? "Not loaded yet. Fetch it on wifi and it stays available for the drive."
-        : "No forecast stored. Connect once and it is kept on the device."}</p>`);
-    }
-    const rows = weatherRows(day, list, sch);
-    const got = rows.filter(r => r.wx);
-    if (!got.length) {
-      return wxShell(`<p class="tiny muted" style="margin:8px 2px 0">The stored forecast
-        doesn't cover ${ROUTE.days[day].date}. Forecasts reach about 16 days ahead.</p>`);
-    }
-    const temps = got.map(r => r.wx.temp);
-    const lo = Math.round(Math.min.apply(null, temps));
-    const hi = Math.round(Math.max.apply(null, temps));
-    const warns = RoadbookWeather.warnings(got);
-
-    return `<div class="wx">
-      <div class="wxhd">
-        <span>Weather along the route</span>
-        <b class="mono">${lo}°–${hi}°C</b>
-        <span class="grow"></span>
-        <span class="tiny muted">${navigator.onLine ? "" : "offline · "}${RoadbookWeather.age()}</span>
-        <button class="btn ghost" id="wxGet" aria-label="Refresh forecast">↻</button>
-      </div>
-      <div class="wxrow">
-        ${rows.filter(r => r.wx).map(r => `
-          <div class="wxc ${r.wx.vis != null && r.wx.vis < 1000 ? "bad" : ""}"
-               data-wxjump="${r.gi}" role="button" tabindex="0">
-            <b>${r.time}</b>
-            <i title="${esc(r.wx.label)}">${r.wx.glyph}</i>
-            <u>${Math.round(r.wx.temp)}°</u>
-            <em>feels ${Math.round(r.wx.feels)}°</em>
-            <span>${esc(r.name)}</span>
-            ${r.wx.vis != null && r.wx.vis < 2000 ? `<s>${Math.round(r.wx.vis)} m vis</s>` : ""}
-            ${r.wx.rain >= 30 ? `<s>${r.wx.rain}% rain</s>` : ""}
-          </div>`).join("")}
-      </div>
-      ${warns.map(w => `<div class="wxwarn ${w.level}">${esc(w.text)}</div>`).join("")}
-    </div>`;
+  function wxDetail(wx) {
+    if (!wx) return "";
+    const bits = [
+      `<b>${Math.round(wx.temp)}°</b>`,
+      `feels ${Math.round(wx.feels)}°`,
+      esc(wx.label),
+      `wind ${Math.round(wx.wind)} km/h`
+    ];
+    if (wx.vis != null) bits.push(wx.vis < 2000
+      ? `<em class="bad">visibility ${Math.round(wx.vis)} m</em>`
+      : `visibility ${(wx.vis / 1000).toFixed(0)} km`);
+    if (wx.rain >= 20) bits.push(`${wx.rain}% rain`);
+    return `<div class="wxstop"><i>${wx.glyph}</i><div>${bits.join(" · ")}</div></div>`;
   }
 
   /* ---------------- day view ---------------- */
   function renderDay(day) {
-    const list = dayList(day), sch = schedule(day), st = state[day];
-    const meta = ROUTE.days[day];
-    const dep = parse(st.depart) ?? parse(meta.depart);
-    const totalKm = list.reduce((t, e, i) => t + (i === 0 ? 0 : e.s.km), 0);
+    const list = dayList(day), sch = schedule(day), meta = ROUTE.days[day];
+    const dep = parse(state.depart[day]) ?? parse(meta.depart);
+    const date = meta.date;
 
-    let h = renderWeather(day, list, sch) + `<div class="ctrl">
+    let h = renderTripWeather(day) + `<div class="ctrl">
       <label for="dep-${day}">Depart</label>
-      <input type="time" id="dep-${day}" value="${st.depart}">
+      <input type="time" id="dep-${day}" value="${state.depart[day]}">
       <button class="btn ghost" data-reset="${day}">Reset</button>
       <button class="btn ghost" id="fmtBtn">${H12 ? "12h" : "24h"}</button>
       <span class="grow"></span>
-      <span class="mono tiny muted">${totalKm} km · ${dur(sch[sch.length - 1].arrive - dep)}</span>
+      <span class="mono tiny muted">${dayKm(day)} km · ${dur(sch[sch.length - 1].arrive - dep)}</span>
     </div>
     <p class="tiny muted" style="margin:10px 2px 14px">${esc(meta.blurb)}</p>`;
 
     list.forEach((e, i) => {
-      const s = e.s, gi = e.gi;
-      const done = !!state.done[gi], open = !!state.open[gi];
+      const l = e.leg, key = e.key;
+      const done = !!state.done[key], open = !!state.open[key];
       const rem = kmRemaining(list, i), nxt = list[i + 1];
+      const wx = RoadbookWeather.atStop(e.gi, date, sch[i].arrive);
 
       if (i > 0) {
-        const warn = s.km >= 180;
-        h += `<div class="gap ${warn ? "warn" : ""}">${warn ? "&#9888; " : ""}${s.km} km · ${dur(s.drive)} driving${warn ? " · longest gap without fuel" : ""}</div>`;
+        const warn = l.km >= 180;
+        h += `<div class="gap ${warn ? "warn" : ""}">${warn ? "&#9888; " : ""}${l.km} km · ${dur(l.drive)} driving${warn ? " · longest gap without fuel" : ""}</div>`;
       }
-      h += `<article class="stop ${s.fuel ? "fuel" : ""} ${done ? "done" : ""} ${e.origin ? "origin" : ""}" data-gi="${gi}">
-        <div class="stophd" data-toggle="${gi}" role="button" tabindex="0">
-          <div class="eta">${fmt(sch[i].arrive)}</div>
-          <div class="num" style="--pin:${(ROUTE.types[s.type] || {}).color || "#888"}">${gi + 1}</div>
-          <div class="sname">${esc(s.name)}<small>${esc((e.origin ? "Departure" : s.sub).toUpperCase())}${s.stay && !e.origin ? " · " + s.stay + " MIN" : ""}</small></div>
+      h += `<article class="stop ${l.fuel ? "fuel" : ""} ${done ? "done" : ""} ${i === 0 ? "origin" : ""}" data-key="${key}">
+        <div class="stophd" data-toggle="${key}" role="button" tabindex="0">
+          <div class="eta">${fmt(sch[i].arrive)}${wx ? `<em>${Math.round(wx.temp)}° ${wx.glyph}</em>` : ""}</div>
+          <div class="num" style="--pin:${(ROUTE.types[e.type] || {}).color || "#888"}">${e.gi + 1}</div>
+          <div class="sname">${esc(e.name)}<small>${esc(l.sub.toUpperCase())}${l.stay ? " · " + l.stay + " MIN" : ""}</small></div>
           <div class="chev">${open ? "▲" : "▼"}</div>
         </div>
         <div class="stopbody ${open ? "" : "hide"}">
-          <div class="chips">${s.svc.map(v => `<span class="chip">${esc(v)}</span>`).join("")}</div>
-          <p>${esc(s.note)}</p>
-          <div class="lm"><b>How you'll know you're there</b>${esc(s.lm)}</div>
+          ${wxDetail(wx)}
+          <div class="chips">${l.svc.map(v => `<span class="chip">${esc(v)}</span>`).join("")}</div>
+          <p>${esc(l.note)}</p>
+          <div class="lm"><b>How you'll know you're there</b>${esc(l.lm)}</div>
           <p class="tiny muted" style="margin-bottom:10px">
             ${sch[i].leave !== sch[i].arrive ? `Leave by <b class="mono">${fmt(sch[i].leave)}</b> · ` : ""}${rem} km still to go</p>
           <div class="acts">
-            <span class="coord">${s.lat.toFixed(5)}, ${s.lng.toFixed(5)}</span>
-            <button class="btn" data-show="${gi}">Show on map</button>
-            <button class="btn ${state.sat[gi] ? "on" : ""}" data-sat="${gi}">Satellite</button>
-            <a class="btn" href="geo:${s.lat},${s.lng}?q=${s.lat},${s.lng}(${encodeURIComponent(s.name)})">Any map app</a>
-            <button class="btn" data-here="${gi}" data-day="${day}">I'm here now</button>
-            <button class="btn" data-done="${gi}">${done ? "Undo" : "Mark done"}</button>
+            <span class="coord">${e.lat.toFixed(5)}, ${e.lng.toFixed(5)}</span>
+            <button class="btn" data-show="${e.gi}">Show on map</button>
+            <button class="btn ${state.sat[key] ? "on" : ""}" data-sat="${key}">Satellite</button>
+            <a class="btn" href="geo:${e.lat},${e.lng}?q=${e.lat},${e.lng}(${encodeURIComponent(e.name)})">Any map app</a>
+            <button class="btn" data-here="${key}">I'm here now</button>
+            <button class="btn" data-done="${key}">${done ? "Undo" : "Mark done"}</button>
           </div>
-          ${state.sat[gi] ? `<div class="sat" id="sat-${gi}">
+          ${state.sat[key] ? `<div class="sat" id="sat-${key}" data-gi="${e.gi}">
             <div class="satgrid"></div><div class="xhair"></div>
             <div class="satbar">
-              <button class="btn ${(state.satz[gi] || 16) === 16 ? "on" : ""}" data-satz="16" data-gi="${gi}">Close</button>
-              <button class="btn ${(state.satz[gi] || 16) === 13 ? "on" : ""}" data-satz="13" data-gi="${gi}">Wide</button>
+              <button class="btn ${(state.satz[key] || 16) === 16 ? "on" : ""}" data-satz="16" data-key="${key}">Close</button>
+              <button class="btn ${(state.satz[key] || 16) === 13 ? "on" : ""}" data-satz="13" data-key="${key}">Wide</button>
               <span class="tiny muted satnote">Loading…</span>
             </div>
             <div class="satattr">Imagery © Esri, Maxar, Earthstar Geographics</div>
           </div>` : ""}
           ${nxt ? `<p class="tiny muted nextline">
-            <b>Next:</b> ${esc(nxt.s.name)} — ${nxt.s.km} km, ${dur(nxt.s.drive)}, bearing ${Math.round(bearing(s.lat, s.lng, nxt.s.lat, nxt.s.lng))}° ${compass(bearing(s.lat, s.lng, nxt.s.lat, nxt.s.lng))}</p>` : ""}
+            <b>Next:</b> ${esc(nxt.name)} — ${nxt.leg.km} km, ${dur(nxt.leg.drive)}, bearing ${Math.round(bearing(e.lat, e.lng, nxt.lat, nxt.lng))}° ${compass(bearing(e.lat, e.lng, nxt.lat, nxt.lng))}</p>` : ""}
         </div>
       </article>`;
     });
     return h;
+  }
+
+  /* ---------------- peek ---------------- */
+  function nextStop() {
+    for (const d of DAYS) {
+      const list = dayList(d);
+      for (let i = 0; i < list.length; i++) if (!state.done[list[i].key]) return list[i];
+    }
+    return null;
+  }
+  function renderPeek() {
+    const e = nextStop(), el = $("#peekBody");
+    if (!e) {
+      el.innerHTML = `<div class="pk-kick">Trip complete</div>
+        <div class="pk-name">Home<span class="pk-far">every stop done</span></div>`;
+      return;
+    }
+    const sch = schedule(e.day);
+    const eta = fmt(sch[e.i].arrive);
+    const wx = RoadbookWeather.atStop(e.gi, ROUTE.days[e.day].date, sch[e.i].arrive);
+    const first = e.i === 0;
+    el.innerHTML =
+      `<div class="pk-kick">Next · ${esc(ROUTE.days[e.day].tab)} · ${e.i + 1} of ${dayList(e.day).length}</div>
+       <div class="pk-name">${esc(e.name)}<span class="pk-far">${esc(e.leg.sub)}</span></div>
+       <div class="pk-num">${first ? "<b>Start</b>" : `<b>${e.leg.km}</b><small>km</small>`}
+         <i>${first ? "Depart " : "ETA "}${eta}${wx ? ` · ${Math.round(wx.temp)}°` : ""}</i></div>`;
   }
 
   /* ---------------- prep view ---------------- */
@@ -343,16 +359,20 @@ const RoadbookSheet = (function () {
     ).join("");
   }
   function gapTable() {
-    const rows = ROUTE.stops.map((s, i) => i === 0 ? "" :
-      `<div class="row ${s.km >= 180 ? "warn" : ""}"><span>${esc(ROUTE.stops[i - 1].name)} → ${esc(s.name)}</span><span>${s.km} km</span></div>`
-    ).join("");
-    return rows;
+    return DAYS.map(d => {
+      const list = dayList(d);
+      return `<div class="row" style="border-top:0;padding-top:12px"><span><b>${esc(ROUTE.days[d].tab)}</b> ${esc(ROUTE.days[d].leg)}</span><span>${dayKm(d)} km</span></div>` +
+        list.slice(1).map((e, i) =>
+          `<div class="row ${e.leg.km >= 180 ? "warn" : ""}"><span>${esc(list[i].name)} → ${esc(e.name)}</span><span>${e.leg.km} km</span></div>`
+        ).join("");
+    }).join("");
   }
   function renderPrep() {
+    const totalKm = DAYS.reduce((t, d) => t + dayKm(d), 0);
     return `
     <h2>Offline basemap</h2>
     <div class="card">
-      <p class="tiny" style="margin-top:0">Caches the road corridor and the area around every stop, so the map behind this sheet keeps working when the data drops. Do this on wifi before you leave.</p>
+      <p class="tiny" style="margin-top:0">Caches the road corridor and the area around every stop, so the map behind this sheet keeps working when the data drops. The return uses the same road, so this covers both directions. Do it on wifi before you leave.</p>
       <div id="estRows"></div>
       <div class="bar"><i id="bar"></i></div>
       <div class="tiny muted" id="stat">Checking what's already stored…</div>
@@ -366,7 +386,7 @@ const RoadbookSheet = (function () {
 
     <h2>Satellite imagery per stop</h2>
     <div class="card">
-      <p class="tiny" style="margin-top:0">Aerial tiles for every stop, stored on this device, so you can see what the junction and the forecourt actually look like with the SIM off. Do this on hotel wifi in Dubai — not at the border.</p>
+      <p class="tiny" style="margin-top:0">Aerial tiles for all ${ROUTE.stops.length} places, stored on this device, so you can see what the junction and the forecourt actually look like with the SIM off. Do this on hotel wifi in Dubai — not at the border.</p>
       <label class="chk" style="border:none;padding:4px 0"><input type="checkbox" id="satWide" checked><span class="tiny">Also grab the wide view (helps confirm you're on the right road, roughly doubles the size)</span></label>
       <div class="acts" style="margin:8px 0">
         <button class="btn primary" id="satGet">Download imagery</button>
@@ -383,11 +403,13 @@ const RoadbookSheet = (function () {
         <a class="btn primary" href="./downloads/dubai-salalah-route.gpx" download>Download GPX</a>
         <a class="btn" href="./downloads/dubai-salalah-route.kml" download>Download KML</a>
       </div>
-      <p class="tiny muted" style="margin:0">13 waypoints and the real road track, ${ROUTE.line.length.toLocaleString()} points. GPX for Organic Maps, OsmAnd and Garmin; KML for Google My Maps and Google Earth. Generated from the same data as the map, so they cannot drift apart.</p>
+      <p class="tiny muted" style="margin:0">The real road track, ${ROUTE.line.length.toLocaleString()} points, Dubai to Salalah. The return follows the same road, so import it once and reverse it in your maps app. Generated from the same data as the map, so they cannot drift apart.</p>
     </div>
 
-    <h2>Fuel gaps</h2>
-    <div class="card" id="gapTable">${gapTable()}</div>
+    <h2>Distances and fuel gaps</h2>
+    <div class="card" id="gapTable">${gapTable()}
+      <div class="row" style="margin-top:10px"><span><b>Round trip</b></span><span>${totalKm.toLocaleString()} km</span></div>
+    </div>
 
     <h2>Documents</h2>
     <div class="card">${checkList("chk_docs", ROUTE.checks.docs)}</div>
@@ -403,23 +425,35 @@ const RoadbookSheet = (function () {
   }
 
   /* ---------------- render + wiring ---------------- */
+  function buildTabs() {
+    const el = $(".tabs");
+    el.innerHTML = DAYS.map(d =>
+      `<button class="tab" role="tab" data-view="d${d}" aria-selected="false">${esc(ROUTE.days[d].tab)}</button>`
+    ).join("") + `<button class="tab" role="tab" data-view="prep" aria-selected="false">Prep</button>`;
+    el.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
+      state.tab = t.dataset.view;
+      render();
+      if (current === DET.PEEK) snapTo(DET.HALF);
+      scroller.scrollTop = 0;
+    }));
+  }
+
   function render() {
     renderPeek();
     const body = $("#sheetBody");
-    body.innerHTML =
-      state.tab === "prep" ? renderPrep() :
-      renderDay(state.tab === "d1" ? 1 : 2);
-
+    body.innerHTML = state.tab === "prep" ? renderPrep()
+                                          : renderDay(+state.tab.slice(1));
     $$(".tab").forEach(t => t.setAttribute("aria-selected", String(t.dataset.view === state.tab)));
 
+    wireWeather();
     if (state.tab === "prep") { wirePrep(); return; }
-    const day = state.tab === "d1" ? 1 : 2;
+    const day = +state.tab.slice(1);
 
     const inp = $("#dep-" + day);
     const onTime = ev => {
       const v = ev.target.value;
       if (parse(v) === null) return;                 // ignore half-typed values
-      state[day].depart = v; state[day].anchor = null;
+      state.depart[day] = v; state.anchor[day] = null;
       store.set("d" + day + "_dep", v);
       render();
     };
@@ -427,42 +461,19 @@ const RoadbookSheet = (function () {
     inp.addEventListener("change", onTime);
 
     $("[data-reset]").addEventListener("click", () => {
-      state[day].depart = ROUTE.days[day].depart; state[day].anchor = null;
-      store.set("d" + day + "_dep", state[day].depart);
+      state.depart[day] = ROUTE.days[day].depart; state.anchor[day] = null;
+      store.set("d" + day + "_dep", state.depart[day]);
       render();
     });
     $("#fmtBtn").addEventListener("click", () => { H12 = !H12; store.set("h12", H12); render(); });
 
-    const wxBtn = $("#wxGet");
-    if (wxBtn) wxBtn.addEventListener("click", () => {
-      wxBtn.disabled = true;
-      const was = wxBtn.textContent;
-      wxBtn.textContent = "…";
-      RoadbookWeather.refresh(true)
-        .then(render)
-        .catch(err => {
-          wxBtn.disabled = false;
-          wxBtn.textContent = was;
-          const hd = $(".wxhd");
-          if (hd) hd.insertAdjacentHTML("afterend",
-            `<p class="tiny muted" style="margin:8px 2px 0">Couldn't load: ${esc(err.message)}</p>`);
-        });
-    });
-
-    /* A weather chip is a way into the stop it describes. */
-    $$("[data-wxjump]").forEach(c => {
-      const go = () => {
-        const gi = +c.dataset.wxjump;
-        state.open[gi] = true; render(); focusStop(gi, true);
-      };
-      c.addEventListener("click", go);
-      c.addEventListener("keydown", ev => {
-        if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); }
-      });
-    });
-
     $$("[data-toggle]").forEach(b => {
-      const go = () => { const gi = +b.dataset.toggle; state.open[gi] = !state.open[gi]; render(); focusStop(gi); };
+      const go = () => {
+        const key = b.dataset.toggle;
+        state.open[key] = !state.open[key];
+        render();
+        focusStop(+b.closest(".stop").querySelector("[data-show]").dataset.show);
+      };
       b.addEventListener("click", go);
       b.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
     });
@@ -470,28 +481,54 @@ const RoadbookSheet = (function () {
       ev.stopPropagation(); focusStop(+b.dataset.show, true);
     }));
     $$("[data-sat]").forEach(b => b.addEventListener("click", () => {
-      const gi = +b.dataset.sat; state.sat[gi] = !state.sat[gi]; render();
-      if (state.sat[gi]) paintSat(gi);
+      const key = b.dataset.sat; state.sat[key] = !state.sat[key]; render();
+      if (state.sat[key]) paintSat(key);
     }));
     $$("[data-satz]").forEach(b => b.addEventListener("click", () => {
-      const gi = +b.dataset.gi; state.satz[gi] = +b.dataset.satz; render(); paintSat(gi);
+      const key = b.dataset.key; state.satz[key] = +b.dataset.satz; render(); paintSat(key);
     }));
     $$("[data-here]").forEach(b => b.addEventListener("click", () => {
-      const gi = +b.dataset.here, d = +b.dataset.day, now = new Date();
-      state[d].anchor = { gi, t: now.getHours() * 60 + now.getMinutes() };
-      for (let j = 0; j < gi; j++) state.done[j] = true;
+      const key = b.dataset.here, now = new Date();
+      state.anchor[day] = { key, t: now.getHours() * 60 + now.getMinutes() };
+      const list = dayList(day);
+      const upto = list.findIndex(e => e.key === key);
+      for (const d2 of DAYS) {
+        if (d2 > day) break;
+        dayList(d2).forEach((e, i) => { if (d2 < day || i < upto) state.done[e.key] = true; });
+      }
       store.set("done", state.done); render();
     }));
     $$("[data-done]").forEach(b => b.addEventListener("click", () => {
-      const gi = +b.dataset.done; state.done[gi] = !state.done[gi];
+      const key = b.dataset.done; state.done[key] = !state.done[key];
       store.set("done", state.done); render();
     }));
 
-    Object.keys(state.sat).forEach(gi => { if (state.sat[gi]) paintSat(+gi); });
+    Object.keys(state.sat).forEach(k => { if (state.sat[k]) paintSat(k); });
+  }
+
+  function wireWeather() {
+    const btn = $("#wxGet");
+    if (btn) btn.addEventListener("click", () => {
+      btn.disabled = true;
+      const was = btn.textContent;
+      btn.textContent = "…";
+      RoadbookWeather.refresh(true)
+        .then(render)
+        .catch(err => {
+          btn.disabled = false; btn.textContent = was;
+          const hd = $(".wxhd");
+          if (hd) hd.insertAdjacentHTML("afterend",
+            `<p class="tiny muted" style="margin:0 12px 10px">Couldn't load: ${esc(err.message)}</p>`);
+        });
+    });
+    $$("[data-wxday]").forEach(r => {
+      const go = () => { state.tab = "d" + r.dataset.wxday; render(); scroller.scrollTop = 0; };
+      r.addEventListener("click", go);
+      r.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
+    });
   }
 
   function wirePrep() {
-    /* basemap precache */
     const bar = $("#bar"), stat = $("#stat");
     const fmtMB = b => (b / 1048576).toFixed(0) + " MB";
     const e = TilePrecache.estimate();
@@ -530,7 +567,6 @@ const RoadbookSheet = (function () {
     btnStop.onclick = () => { TilePrecache.abort(); btnStop.disabled = true; };
     $("#btnClear").onclick = () => TilePrecache.clear().then(() => { bar.style.width = "0"; refresh(); });
 
-    /* satellite imagery */
     const satBar = $("#satBar"), satStat = $("#satStat");
     SAT.count().then(n => { if (n) satStat.innerHTML = `<b>${n.toLocaleString()}</b> imagery tiles stored.`; });
     $("#satGet").onclick = async function () {
@@ -547,7 +583,6 @@ const RoadbookSheet = (function () {
       await SAT.clear(); satBar.style.width = "0"; satStat.textContent = "Imagery cleared.";
     };
 
-    /* checklists */
     $$("[data-chk]").forEach(c => c.addEventListener("change", () => {
       const id = c.dataset.chk, m = store.get(id, {});
       m[c.dataset.i] = c.checked; store.set(id, m);
@@ -560,11 +595,7 @@ const RoadbookSheet = (function () {
     RoadbookMap.focusStop(gi, coveredPx());
   }
 
-  /* ---------------- sheet mechanics ----------------
-     Detents are translateY offsets from fully-open. Dragging the
-     handle always moves the sheet; dragging the body only moves it
-     when the body is already scrolled to the top and you pull down,
-     so the list scrolls normally the rest of the time. */
+  /* ---------------- sheet mechanics ---------------- */
   const DET = { FULL: "full", HALF: "half", PEEK: "peek" };
   let sheet, scroller, grabEl, peekEl, tabsEl, maxH = 0, current = DET.PEEK, y = 0;
 
@@ -654,7 +685,7 @@ const RoadbookSheet = (function () {
       snapTo(nearest(y, vel));
     };
 
-    const handle = $("#grab");
+    const handle = grabEl;
     handle.addEventListener("pointerdown", ev => { handle.setPointerCapture(ev.pointerId); down(ev, false); });
     handle.addEventListener("pointermove", move);
     handle.addEventListener("pointerup", up);
@@ -665,7 +696,6 @@ const RoadbookSheet = (function () {
     scroller.addEventListener("pointerup", up);
     scroller.addEventListener("pointercancel", up);
 
-    // Tap the handle to cycle, so the sheet is usable without dragging.
     handle.addEventListener("click", () => {
       if (Math.abs(y - detentY(current)) > 4) return;              // was a drag
       snapTo(current === DET.PEEK ? DET.HALF : current === DET.HALF ? DET.FULL : DET.PEEK);
@@ -680,22 +710,19 @@ const RoadbookSheet = (function () {
   function init() {
     sheet = $("#sheet"); scroller = $("#sheetBody");
     grabEl = $("#grab"); peekEl = $("#peek"); tabsEl = $(".tabs");
-    $$(".tab").forEach(t => t.addEventListener("click", () => {
-      state.tab = t.dataset.view;
-      render();
-      if (current === DET.PEEK) snapTo(DET.HALF);
-      scroller.scrollTop = 0;
-    }));
-    $("#peek").addEventListener("click", ev => {
+    buildTabs();
+    peekEl.addEventListener("click", ev => {
       if (ev.target.closest("#grab")) return;
-      const gi = nextStop();
-      if (gi >= 0) { state.open[gi] = true; state.tab = ROUTE.stops[gi].day === 1 ? "d1" : "d2"; render(); }
+      const e = nextStop();
+      if (e) { state.open[e.key] = true; state.tab = "d" + e.day; render(); }
       snapTo(DET.HALF);
-      if (gi >= 0) focusStop(gi);
+      if (e) focusStop(e.gi);
     });
     bindDrag();
     render();
     measure();
+    window.addEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
 
     /* Warm the forecast in the background. A failure here is silent by
        design: no network is the expected state for most of this trip, and
@@ -704,8 +731,6 @@ const RoadbookSheet = (function () {
     window.addEventListener("online", () => {
       RoadbookWeather.refresh().then(render).catch(() => {});
     });
-    window.addEventListener("resize", measure);
-    window.addEventListener("orientationchange", measure);
     return { snapTo, DET };
   }
 

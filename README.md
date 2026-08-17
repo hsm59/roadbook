@@ -1,4 +1,4 @@
-# Roadbook PWA — offline map for Dubai → Salalah
+# Roadbook PWA — offline map for Dubai → Salalah → Dubai
 
 Leaflet + Service Worker + Cache API. No build step, no framework, no state library.
 Leaflet is vendored locally, so nothing is fetched from a CDN at runtime.
@@ -98,6 +98,31 @@ expensive — buffer radius and zoom ceiling are.
 `MAX_ZOOM` is 15 — each extra level quadruples storage, and 15 is still enough to
 read a fuel station forecourt.
 
+## Places and legs
+
+The return drives the same road backwards, so every place is visited twice.
+A flat list of stops would put two markers on each coordinate and label the
+borders wrongly — Mezyad is the UAE **exit** going out and the UAE **entry**
+coming home. So the data splits in two:
+
+- `ROUTE.stops` — the 13 physical places. Name, position, marker type. One
+  marker each. This is also what `precache.js` buffers and what `weather.js`
+  asks the forecast about.
+- `ROUTE.days[n].legs` — one visit to one place on one day: `at` (index into
+  `stops`), `sub`, `km`, `drive`, `stay`, `fuel`, `svc`, `note`, `lm`. Notes and
+  landmarks are per leg because they are direction-dependent; Bahla's fort is on
+  your right going south and your left coming back.
+
+A stop is identified by `"<day>:<legIndex>"`, so ticking Haima off on the way
+south does not tick it off on the way home.
+
+**Adding a day means adding one `days` entry.** Tabs, the trip weather summary,
+the distance table and the peek all build themselves from it. 20–21 Aug are in
+Salalah and deliberately absent until they are planned.
+
+Round trip is 2,618 km: 1,309 out, 1,309 back. The precache is unchanged by the
+return — same road, same tiles.
+
 ## Weather
 
 A single figure for "today" is useless here. On 19 Aug the Aqabat descent is at
@@ -106,14 +131,24 @@ same day, 400 km apart. So the forecast is fetched **per stop** and read at the
 hour the schedule puts you there. Change the departure time and every reading
 moves with it.
 
-Open-Meteo, keyless and CORS-enabled; all 13 stops come back in one request.
+Two levels: a **trip summary** at the top of every day — one row per day with its
+temperature range and worst hazard, tap to jump — and the **per-stop conditions**
+inside each stop card, with a temperature on the collapsed row.
+
+Open-Meteo, keyless and CORS-enabled; all 13 places come back in one request.
 Cached in `localStorage` (~16 KB) rather than the Cache API, so clearing tiles
 does not clear it. Offline, the last fetch is shown with its age stated.
 
-Thresholds live in `warnings()` in `weather.js`: visibility under 1 km, apparent
-temperature at or above 42°C, rain at or above 50%, wind at or above 40 km/h.
-They are tuned for a Gulf summer crossing — 45°C was too high to fire on a route
-whose hottest scheduled point is 44°C.
+Thresholds live in `warnings()` in `weather.js`. Two of them earned their
+values the hard way:
+
+- **Heat fires on apparent ≥ 42°C _or_ actual ≥ 44°C.** In dry desert air the
+  apparent temperature runs *below* the real one — Qitbit on 22 Aug is 45°C real
+  but 40°C felt. Keying on "feels like" alone reported that day as clear.
+- **Visibility under 1 km**, which is what makes the Aqabat dangerous rather
+  than scenic.
+
+Rain at or above 50% and wind at or above 40 km/h round it out.
 
 ## Tile provider and terms
 

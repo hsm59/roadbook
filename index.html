@@ -73,10 +73,14 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 .pk-num small{font-size:10px;color:var(--dim);margin-left:2px}
 .pk-num i{display:block;font-style:normal;font-size:10.5px;color:var(--dim)}
 
-.tabs{flex:none;display:none;gap:6px;padding:0 12px 10px;border-bottom:1px solid var(--line)}
+/* Five tabs do not fit a phone at equal width, so they scroll instead of
+   shrinking into unreadable stubs. */
+.tabs{flex:none;display:none;gap:6px;padding:0 12px 10px;border-bottom:1px solid var(--line);
+  overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
 #sheet.expanded .tabs{display:flex}
-.tab{flex:1;font-family:var(--mono);font-size:11px;padding:8px 6px;border-radius:8px;cursor:pointer;
-  background:transparent;border:1px solid transparent;color:var(--dim)}
+.tab{flex:none;font-family:var(--mono);font-size:11px;padding:8px 12px;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--dim);white-space:nowrap}
 .tab[aria-selected="true"]{background:var(--panel2);border-color:var(--line);color:var(--text)}
 .tab:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
 
@@ -97,29 +101,40 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 .ctrl input[type=time]{font-family:var(--mono);font-size:13px;background:var(--panel2);color:var(--text);
   border:1px solid var(--line);border-radius:8px;padding:7px 9px}
 
-/* weather strip */
-.wx{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 0 2px;margin-bottom:14px}
+/* trip weather — one row per day, the whole trip at a glance */
+.wx{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:10px 0 4px;margin-bottom:14px}
 .wxhd{display:flex;align-items:center;gap:8px;padding:0 12px 8px;
   font-family:var(--mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
-.wxhd b{color:var(--amber);letter-spacing:0;font-size:11.5px}
 .wxhd .btn{padding:3px 8px;font-size:11px}
-.wxrow{display:flex;gap:7px;overflow-x:auto;padding:0 12px 10px;scroll-snap-type:x proximity;
-  -webkit-overflow-scrolling:touch}
-.wxc{flex:none;width:80px;background:var(--panel);border:1px solid var(--line);border-radius:10px;
-  padding:8px 6px;text-align:center;scroll-snap-align:start;cursor:pointer;display:flex;
-  flex-direction:column;align-items:center;gap:1px}
-.wxc:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
-.wxc.bad{border-color:var(--red)}
-.wxc b{font-family:var(--mono);font-size:10.5px;color:var(--amber);font-weight:500}
-.wxc i{font-style:normal;font-size:17px;line-height:1.25}
-.wxc u{text-decoration:none;font-size:16px;font-weight:650}
-.wxc em{font-style:normal;font-family:var(--mono);font-size:9px;color:var(--dim)}
-.wxc span{font-size:9.5px;color:var(--dim);line-height:1.25;margin-top:2px;
-  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:100%}
-.wxc s{text-decoration:none;font-family:var(--mono);font-size:9px;color:var(--red);margin-top:2px}
+.wxday{display:flex;align-items:center;gap:9px;padding:8px 12px;cursor:pointer;
+  border-top:1px solid var(--line)}
+.wxday:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.wxday.on{background:var(--panel)}
+.wxday.on b{color:var(--amber)}
+.wxday b{font-family:var(--mono);font-size:10.5px;font-weight:500;color:var(--text);
+  min-width:46px;white-space:nowrap}
+.wxday>span{flex:1;font-size:11.5px;color:var(--dim);min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wxday i{font-style:normal;font-size:15px;line-height:1}
+.wxday u{text-decoration:none;font-family:var(--mono);font-size:12px;min-width:58px;text-align:right}
+.wxday s{text-decoration:none;font-family:var(--mono);font-size:9px;padding:2px 6px;border-radius:20px;
+  min-width:62px;text-align:center;background:var(--panel);border:1px solid var(--line);color:var(--dim)}
+.wxday s.warn{color:var(--amber);border-color:var(--amber)}
+.wxday s.high{color:var(--red);border-color:var(--red)}
+.wxday.bad{background:rgba(224,87,74,.07)}
 .wxwarn{margin:0 12px 10px;padding:8px 10px;border-radius:8px;font-size:12px;line-height:1.5;
   background:var(--panel);border-left:2px solid var(--amber);color:var(--dim)}
 .wxwarn.high{border-left-color:var(--red);color:var(--text)}
+/* per-stop conditions, inside the card */
+.wxstop{display:flex;gap:9px;align-items:flex-start;background:var(--panel);border-radius:8px;
+  padding:8px 10px;margin:2px 0 10px;font-family:var(--mono);font-size:11px;color:var(--dim);line-height:1.55}
+.wxstop i{font-style:normal;font-size:16px;line-height:1.1}
+.wxstop b{color:var(--text);font-size:13px}
+.wxstop em{font-style:normal}
+.wxstop em.bad{color:var(--red)}
+.eta em{display:block;font-style:normal;font-size:10px;color:var(--dim);margin-top:2px}
+.rb-pop-visit{margin:0 0 4px!important;font-size:12px!important;color:var(--dim)!important}
+.rb-pop-visit b{color:var(--amber);font-family:var(--mono);font-size:11px}
 
 /* stop cards */
 .gap{font-family:var(--mono);font-size:10.5px;color:var(--faint);padding:7px 0 7px 14px;
@@ -223,7 +238,7 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 
 <header>
   <div class="mark">N3</div>
-  <h1>Dubai → Salalah<small id="sub">18–19 Aug 2026 · 13 stops</small></h1>
+  <h1 id="title">Dubai → Salalah → Dubai<small id="sub">18–23 Aug 2026</small></h1>
   <div id="net">…</div>
 </header>
 
@@ -239,11 +254,8 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 
   <div id="peek"><div id="peekBody"></div></div>
 
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-view="d1" aria-selected="true">Day 1 · Nizwa</button>
-    <button class="tab" role="tab" data-view="d2" aria-selected="false">Day 2 · Salalah</button>
-    <button class="tab" role="tab" data-view="prep" aria-selected="false">Prep</button>
-  </div>
+  <!-- Tabs are built from ROUTE.days, so adding a day adds a tab. -->
+  <div class="tabs" role="tablist"></div>
 
   <div id="sheetBody"></div>
 </div>
@@ -270,8 +282,13 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 
   /* ---------- 2. map + sheet ---------- */
   RoadbookMap.init("map");
+  var days = Object.keys(ROUTE.days);
+  var totalKm = days.reduce(function (t, d) {
+    return t + ROUTE.days[d].legs.reduce(function (a, l) { return a + l.km; }, 0);
+  }, 0);
+  document.getElementById("title").firstChild.nodeValue = ROUTE.name;
   document.getElementById("sub").textContent =
-    ROUTE.dates + " · " + ROUTE.stops.length + " stops";
+    ROUTE.dates + " · " + days.length + " driving days · " + totalKm.toLocaleString() + " km";
   RoadbookSheet.init();
 
   /* Keep the floating map buttons clear of the sheet as it moves, and get them
