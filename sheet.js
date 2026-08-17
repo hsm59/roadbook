@@ -253,9 +253,11 @@ const RoadbookSheet = (function () {
       esc(wx.label),
       `wind ${Math.round(wx.wind)} km/h`
     ];
+    /* Below 10 km, show a decimal. Rounding 2,660 m to "3 km" hides exactly
+       the range that matters on the Aqabat — murky but drivable. */
     if (wx.vis != null) bits.push(wx.vis < 2000
       ? `<em class="bad">visibility ${Math.round(wx.vis)} m</em>`
-      : `visibility ${(wx.vis / 1000).toFixed(0)} km`);
+      : `visibility ${(wx.vis / 1000).toFixed(wx.vis < 10000 ? 1 : 0)} km`);
     if (wx.rain >= 20) bits.push(`${wx.rain}% rain`);
     return `<div class="wxstop"><i>${wx.glyph}</i><div>${bits.join(" · ")}</div></div>`;
   }

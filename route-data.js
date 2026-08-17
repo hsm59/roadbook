@@ -119,7 +119,7 @@ const ROUTE = {
     /* ---- return ---- */
     3: { label: "Sat 22 Aug", tab: "Sat 22", date: "2026-08-22", depart: "14:00",
          leg: "Salalah → Haima",
-         blurb: "499 km, about 5 h 10 m driving. A deliberately short first half of the return: a 14:00 start puts the mountain climb in daylight and leaves the long empty stretch to Haima for the evening. Sunset is near 18:40, so the last two hours are dark. Leaving at 14:00, Haima is the only overnight worth stopping at — Qitbit at 17:20 is too early to be worth it and Adam is 23:20.",
+         blurb: "499 km, about 5 h 10 m driving. The 14:00 start keeps Saturday morning free for Salalah and still puts the mountain climb in daylight, leaving the long empty stretch to Haima for the evening. Sunset is near 18:40, so the last two hours are dark. From a 14:00 departure Haima is the only overnight worth having — Qitbit at 17:20 is too early to bother with, Ghaba has no beds, and Adam is 23:20.",
          legs: [
       { at:12, sub:"Departure", km:0, drive:0, stay:0, fuel:false,
         svc:["Fill up here","Water"],
