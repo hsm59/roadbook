@@ -1,0 +1,32 @@
+# fly.io — free allowance covers this comfortably.
+#   fly launch --no-deploy --copy-config
+#   fly deploy
+app = "roadbook-salalah"          # change to something unique
+primary_region = "dxb"            # Dubai
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port = 8080
+  force_https = true              # required: no HTTPS, no service worker
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.http_options.response.headers]
+    X-Content-Type-Options = "nosniff"
+
+[[http_service.checks]]
+  grace_period = "5s"
+  interval = "30s"
+  method = "GET"
+  path = "/healthz"
+  timeout = "3s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "Routing configuration. Edit this, then re-run tools/fetch-route.py.",
+    "",
+    "waypoints  ordered list the router must pass through. 'via' entries are",
+    "           shaping points only - they force the path onto a particular",
+    "           road and never appear as markers. Non-via entries correspond",
+    "           to ROUTE.stops. Reorder, insert or delete freely.",
+    "radius_m   how far the router may snap a waypoint to find a road. Small",
+    "           values keep a point pinned to the exact carriageway; too small",
+    "           and the request fails with NoSegment. null = router default.",
+    "",
+    "Changing tolerance_m alone does NOT need a refetch - run",
+    "tools/route-from-track.py on the cached raw geometry instead."
+  ],
+
+  "router": {
+    "base_url": "https://router.project-osrm.org",
+    "profile": "driving",
+    "continue_straight": false
+  },
+
+  "tolerance_m": 12,
+  "raw_output": "tools/route.raw.geojson",
+
+  "waypoints": [
+    { "name": "Al Nahda 1, Dubai",      "lat": 25.2930,    "lng": 55.3650,    "radius_m": null },
+    { "name": "Last UAE fuel",          "lat": 24.0450,    "lng": 55.8300,    "radius_m": null },
+    { "name": "Mezyad Border Post",     "lat": 24.0231623, "lng": 55.8462712, "radius_m": 1000 },
+    { "name": "Hafeet Border Post",     "lat": 24.0128417, "lng": 55.8482115, "radius_m": 1000 },
+    { "name": "Ibri",                   "lat": 23.2163282, "lng": 56.4925148, "radius_m": null },
+    { "name": "Nizwa — Intercity Hotel","lat": 22.8735362, "lng": 57.5363993, "radius_m": null },
+    { "name": "Adam",                   "lat": 22.3946927, "lng": 57.5147239, "radius_m": null },
+    { "name": "Ghaba — Al Maha",        "lat": 21.3789567, "lng": 57.2538543, "radius_m": null },
+    { "name": "Haima",                  "lat": 19.9567873, "lng": 56.2758961, "radius_m": null },
+    { "name": "Qitbit",                 "lat": 19.1760410, "lng": 54.5019967, "radius_m": null },
+    { "name": "Thumrait",               "lat": 17.6107190, "lng": 54.0354019, "radius_m": null },
+    { "name": "Aqabat descent",         "lat": 17.3500000, "lng": 54.0700000, "radius_m": null },
+    { "name": "Salalah Beach Resort",   "lat": 17.0088533, "lng": 54.1576577, "radius_m": null }
+  ]
+}

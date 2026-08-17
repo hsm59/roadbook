@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0F0E0C">
+<title>Roadbook — Dubai to Salalah</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="stylesheet" href="./vendor/leaflet.css">
+<style>
+:root{
+  --bg:#0F0E0C; --panel:#191612; --panel2:#221E18; --line:#332D23;
+  --text:#EFE6D4; --dim:#988E7C; --faint:#5E5648;
+  --amber:#F5A623; --green:#42A96E; --red:#E0574A; --blue:#5E9FD4;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);
+  display:flex;flex-direction:column;overflow:hidden}
+header{display:flex;align-items:center;gap:10px;padding:10px 14px;
+  padding-top:calc(10px + env(safe-area-inset-top));
+  border-bottom:1px solid var(--line);flex:none;z-index:1000}
+.mark{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--amber);
+  border:1px solid var(--amber);border-radius:3px;padding:3px 6px}
+h1{font-size:14px;margin:0;font-weight:650;flex:1;line-height:1.25}
+h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim);font-weight:400}
+#net{font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--line);border-radius:20px;padding:3px 8px;color:var(--dim)}
+#net.off{color:var(--red);border-color:var(--red)}
+#net.on{color:var(--green);border-color:var(--green)}
+#map{flex:1;min-height:0;background:#12100E}
+
+.btn{font-family:var(--mono);font-size:12px;background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:8px;padding:8px 11px;cursor:pointer;
+  text-decoration:none;display:inline-block;line-height:1.2}
+.btn.primary{background:var(--amber);border-color:var(--amber);color:#161207;font-weight:700}
+.btn.danger{color:var(--red);border-color:var(--red);background:transparent}
+.btn.ghost{background:transparent}
+.btn.on{border-color:var(--amber);color:var(--amber)}
+.btn:disabled{opacity:.45}
+.btn:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+.grow{flex:1}
+.mono{font-family:var(--mono)}
+.tiny{font-size:11.5px;line-height:1.55}
+.muted{color:var(--dim)}
+
+/* floating map controls, above the sheet */
+#mapbtns{position:fixed;right:12px;z-index:1100;display:flex;flex-direction:column;
+  align-items:flex-end;gap:8px;
+  transition:bottom .26s cubic-bezier(.22,.61,.36,1),opacity .18s linear}
+
+/* ---------------- bottom sheet ---------------- */
+/* No touch-action here: it applies to descendants too, and `none` would stop
+   the body from scrolling under a finger. Only the grab handle opts out. */
+#sheet{position:fixed;left:0;right:0;bottom:0;z-index:1200;display:flex;flex-direction:column;
+  background:var(--panel);border-top:1px solid var(--line);border-radius:16px 16px 0 0;
+  box-shadow:0 -8px 30px rgba(0,0,0,.45);will-change:transform}
+#grab{flex:none;padding:8px 0 4px;cursor:grab;touch-action:none;background:none;border:0;
+  width:100%;display:block}
+#grab:focus-visible{outline:2px solid var(--blue);outline-offset:-4px;border-radius:12px}
+#grab i{display:block;width:38px;height:4px;border-radius:2px;background:var(--line);margin:0 auto}
+#peek{flex:none;display:flex;align-items:center;gap:12px;padding:2px 16px 12px;cursor:pointer}
+#sheet.expanded #peek{display:none}
+.pk-kick{font-family:var(--mono);font-size:9.5px;letter-spacing:.13em;text-transform:uppercase;color:var(--amber)}
+.pk-name{font-size:15px;font-weight:650;line-height:1.25}
+.pk-name .pk-far{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim);font-weight:400;text-transform:uppercase;letter-spacing:.06em}
+#peekBody{display:flex;align-items:center;gap:12px;width:100%}
+#peekBody>div:nth-child(2){flex:1;min-width:0}
+.pk-num{text-align:right;font-family:var(--mono);white-space:nowrap}
+.pk-num b{font-size:19px;color:var(--amber)}
+.pk-num small{font-size:10px;color:var(--dim);margin-left:2px}
+.pk-num i{display:block;font-style:normal;font-size:10.5px;color:var(--dim)}
+
+.tabs{flex:none;display:none;gap:6px;padding:0 12px 10px;border-bottom:1px solid var(--line)}
+#sheet.expanded .tabs{display:flex}
+.tab{flex:1;font-family:var(--mono);font-size:11px;padding:8px 6px;border-radius:8px;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--dim)}
+.tab[aria-selected="true"]{background:var(--panel2);border-color:var(--line);color:var(--text)}
+.tab:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+
+/* max-height is set from JS to the part of the sheet actually on screen — the
+   sheet is full-height and translated down, so at any detent below full its
+   lower portion hangs past the viewport bottom. Without the cap, that much of
+   the scroll area is unreachable. */
+#sheetBody{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain;padding:12px 14px calc(28px + env(safe-area-inset-bottom));
+  touch-action:pan-y}
+#sheet:not(.expanded) #sheetBody{display:none}
+#sheetBody h2{font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--dim);margin:20px 0 8px;font-weight:500}
+#sheetBody h2:first-child{margin-top:4px}
+.card{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:12px}
+.ctrl{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ctrl label{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.ctrl input[type=time]{font-family:var(--mono);font-size:13px;background:var(--panel2);color:var(--text);
+  border:1px solid var(--line);border-radius:8px;padding:7px 9px}
+
+/* stop cards */
+.gap{font-family:var(--mono);font-size:10.5px;color:var(--faint);padding:7px 0 7px 14px;
+  border-left:2px solid var(--line);margin-left:16px}
+.gap.warn{color:var(--amber);border-left-color:var(--amber)}
+.stop{background:var(--panel2);border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:2px 0}
+.stop.fuel{border-left:3px solid var(--amber)}
+.stop.done{opacity:.55}
+.stop.origin{border-style:dashed}
+.stophd{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer}
+.stophd:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
+.eta{font-family:var(--mono);font-size:12px;color:var(--amber);min-width:44px}
+.num{width:22px;height:22px;flex:none;border-radius:50%;background:var(--pin,#888);color:#0F0E0C;
+  font-family:var(--mono);font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+.sname{flex:1;font-size:13.5px;font-weight:600;line-height:1.3;min-width:0}
+.sname small{display:block;font-family:var(--mono);font-size:9.5px;color:var(--dim);font-weight:400;letter-spacing:.06em}
+.chev{color:var(--faint);font-size:10px}
+.stopbody{padding:0 12px 12px;font-size:13px;line-height:1.55}
+.stopbody.hide{display:none}
+.stopbody p{margin:0 0 10px}
+.chips{display:flex;flex-wrap:wrap;gap:5px;margin:2px 0 10px}
+.chip{font-family:var(--mono);font-size:9.5px;background:var(--panel);border:1px solid var(--line);
+  border-radius:20px;padding:3px 8px;color:var(--dim)}
+.lm{background:var(--panel);border-radius:8px;padding:9px 10px;font-size:12.5px;line-height:1.5;margin-bottom:10px}
+.lm b{display:block;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--amber);margin-bottom:4px;font-weight:500}
+.acts{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.coord{font-family:var(--mono);font-size:10.5px;color:var(--faint);margin-right:auto}
+.nextline{margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px}
+
+/* satellite grid */
+.sat{position:relative;margin-top:10px;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.satgrid{display:grid;grid-template-columns:repeat(3,1fr);background:var(--panel);aspect-ratio:1}
+.satgrid img{width:100%;height:100%;display:block;object-fit:cover}
+.satgrid img.miss{background:repeating-linear-gradient(45deg,#1a1714,#1a1714 6px,#221E18 6px,#221E18 12px)}
+.xhair{position:absolute;width:14px;height:14px;margin:-7px 0 0 -7px;border:2px solid var(--amber);
+  border-radius:50%;pointer-events:none;box-shadow:0 0 0 2px rgba(0,0,0,.5)}
+.satbar{display:flex;gap:6px;align-items:center;padding:7px 8px;background:var(--panel)}
+.satattr{font-size:9.5px;color:var(--faint);padding:0 8px 7px;background:var(--panel)}
+
+/* prep bits */
+.row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;
+  border-top:1px solid var(--line);font-size:12.5px}
+.row:first-child{border-top:0}
+.row span:last-child{font-family:var(--mono);color:var(--dim);white-space:nowrap}
+.row.warn span:last-child{color:var(--amber)}
+.bar{height:6px;background:var(--panel);border-radius:3px;overflow:hidden;margin:12px 0 8px}
+.bar i{display:block;height:100%;width:0;background:var(--amber);transition:width .2s}
+.note{font-size:12px;color:var(--dim);line-height:1.55}
+.note b{color:var(--text)}
+.warn.note{border-left:2px solid var(--amber);padding-left:10px}
+.chk{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line);
+  font-size:12.5px;line-height:1.45;cursor:pointer}
+.chk:first-child{border-top:0}
+.chk input{margin:2px 0 0;flex:none;accent-color:var(--amber);width:15px;height:15px}
+/* Only checklist items strike through when ticked — scoped to [data-chk] so
+   plain option toggles (the wide-imagery switch) are not styled as "done". */
+.chk input[data-chk]:checked+span{color:var(--faint);text-decoration:line-through}
+.tel{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 0;
+  border-top:1px solid var(--line);color:var(--text);text-decoration:none;font-size:13px}
+.tel:first-child{border-top:0}
+.tel em{display:block;font-style:normal;font-size:11px;color:var(--dim)}
+.tel b{font-family:var(--mono);color:var(--amber);white-space:nowrap}
+.foot{text-align:center;font-size:10.5px;color:var(--faint);line-height:1.7;margin:22px 0 6px}
+
+/* Leaflet overrides */
+.leaflet-container{background:#12100E;font-family:var(--sans)}
+.leaflet-control-attribution{background:rgba(15,14,12,.8)!important;color:var(--faint)!important;font-size:9.5px}
+.leaflet-control-attribution a{color:var(--dim)!important}
+.leaflet-bar a{background:var(--panel)!important;color:var(--text)!important;border-color:var(--line)!important}
+.leaflet-control-layers{background:var(--panel)!important;color:var(--text)!important;border:1px solid var(--line)!important}
+/* Leaflet ships this glyph as images/layers.png, which we do not vendor — the
+   only runtime asset the CSS still reached for. Inline SVG instead: no binary,
+   no 404, and it is already the right colour in the dark theme. */
+.leaflet-control-layers-toggle,
+.leaflet-retina .leaflet-control-layers-toggle{
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23EFE6D4' stroke-width='1.7' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M12 3.5 3.5 8l8.5 4.5L20.5 8 12 3.5Z'/%3E%3Cpath d='M3.5 12.5 12 17l8.5-4.5'/%3E%3Cpath d='M3.5 16.8 12 21.3l8.5-4.5'/%3E%3C/svg%3E");
+  background-size:20px 20px;background-position:50% 50%}
+.rb-pin{width:30px;height:30px;border-radius:50%;background:var(--panel);
+  border:2px solid var(--pin);display:flex;align-items:center;justify-content:center;
+  position:relative;box-shadow:0 2px 6px rgba(0,0,0,.5)}
+.rb-pin-glyph{font-size:13px;line-height:1}
+.rb-pin-num{position:absolute;top:-5px;right:-5px;background:var(--pin);color:#0F0E0C;
+  font-family:var(--mono);font-size:9px;font-weight:700;border-radius:9px;padding:1px 4px}
+.leaflet-popup-content-wrapper{background:var(--panel);color:var(--text);border-radius:10px;
+  border:1px solid var(--line)}
+.leaflet-popup-tip{background:var(--panel)}
+.rb-pop h3{margin:2px 0 6px;font-size:14px}
+.rb-pop p{margin:0 0 8px;font-size:13px;line-height:1.5;color:var(--text)}
+.rb-pop-kicker{font-family:var(--mono);font-size:9.5px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--amber)}
+.rb-pop-coord{font-family:var(--mono);font-size:11px;color:var(--dim)}
+.rb-pop-links{display:flex;justify-content:space-between;gap:10px;margin-top:8px;
+  font-family:var(--mono);font-size:11px}
+.rb-pop-links a{color:var(--blue)}
+.rb-pop-links span{color:var(--faint)}
+@media (prefers-reduced-motion:reduce){#sheet,#mapbtns{transition:none!important}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">N3</div>
+  <h1>Dubai → Salalah<small id="sub">18–19 Aug 2026 · 13 stops</small></h1>
+  <div id="net">…</div>
+</header>
+
+<div id="map"></div>
+
+<div id="mapbtns">
+  <button class="btn" id="btnLocate">Find me</button>
+  <button class="btn" id="btnFit">Whole route</button>
+</div>
+
+<div id="sheet" data-detent="peek" role="region" aria-label="Roadbook">
+  <button id="grab" aria-label="Expand or collapse the roadbook"><i></i></button>
+
+  <div id="peek"><div id="peekBody"></div></div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-view="d1" aria-selected="true">Day 1 · Nizwa</button>
+    <button class="tab" role="tab" data-view="d2" aria-selected="false">Day 2 · Salalah</button>
+    <button class="tab" role="tab" data-view="prep" aria-selected="false">Prep</button>
+  </div>
+
+  <div id="sheetBody"></div>
+</div>
+
+<script src="./vendor/leaflet.js"></script>
+<script src="./route-data.js"></script>
+<script src="./app.js"></script>
+<script src="./precache.js"></script>
+<script src="./sheet.js"></script>
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- 1. register the service worker ---------- */
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("./sw.js")
+        .catch(function (e) { console.warn("SW registration failed:", e); });
+    });
+  } else {
+    console.warn("No service worker support — offline tiles will not work.");
+  }
+
+  /* ---------- 2. map + sheet ---------- */
+  RoadbookMap.init("map");
+  document.getElementById("sub").textContent =
+    ROUTE.dates + " · " + ROUTE.stops.length + " stops";
+  RoadbookSheet.init();
+
+  /* Keep the floating map buttons clear of the sheet as it moves, and get them
+     out of the way entirely once the sheet has covered the map — otherwise
+     they ride up over the header. */
+  var mapbtns = document.getElementById("mapbtns");
+  var sheetEl = document.getElementById("sheet");
+  function lift() {
+    var covered = RoadbookSheet.coveredPx();
+    var hidden = covered > window.innerHeight * 0.7;
+    mapbtns.style.bottom = (covered + 12) + "px";
+    mapbtns.style.opacity = hidden ? "0" : "1";
+    mapbtns.style.pointerEvents = hidden ? "none" : "auto";
+  }
+  lift();
+  new MutationObserver(lift).observe(sheetEl, { attributes: true, attributeFilter: ["style", "data-detent"] });
+  window.addEventListener("resize", lift);
+
+  /* ---------- 3. network badge ---------- */
+  var net = document.getElementById("net");
+  function paintNet() {
+    var on = navigator.onLine;
+    net.textContent = on ? "online" : "offline";
+    net.className = on ? "on" : "off";
+  }
+  paintNet();
+  window.addEventListener("online", paintNet);
+  window.addEventListener("offline", paintNet);
+
+  /* ---------- 4. map buttons ---------- */
+  document.getElementById("btnFit").onclick = function () {
+    RoadbookSheet.snapTo(RoadbookSheet.DET.PEEK);
+    RoadbookMap.getMap().fitBounds(RoadbookMap.getBounds(), { padding: [10, 10] });
+  };
+  document.getElementById("btnLocate").onclick = function () {
+    var b = this; b.textContent = "Locating…"; b.disabled = true;
+    RoadbookMap.locate()
+      .then(function (r) {
+        b.textContent = Math.round(r.nearest.km) + " km from " + r.nearest.stop.name;
+      })
+      .catch(function () { b.textContent = "No GPS fix"; })
+      .then(function () {
+        b.disabled = false;
+        setTimeout(function () { b.textContent = "Find me"; }, 6000);
+      });
+  };
+})();
+</script>
+</body>
+</html>

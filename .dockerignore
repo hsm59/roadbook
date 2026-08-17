@@ -1,0 +1,14 @@
+.git
+.gitignore
+node_modules
+*.tgz
+*.zip
+Dockerfile
+.dockerignore
+docker-compose.yml
+DEPLOY.md
+fly.toml
+render.yaml
+koyeb.yaml
+Makefile
+.github

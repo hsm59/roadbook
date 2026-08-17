@@ -1,0 +1,13 @@
+# render.com — free web service tier.
+# Push this repo, then New → Blueprint and point at it.
+services:
+  - type: web
+    name: roadbook-salalah
+    runtime: docker
+    plan: free
+    region: singapore              # closest Render region to the UAE
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    envVars:
+      - key: PORT
+        value: "8080"

@@ -1,0 +1,109 @@
+# =============================================================================
+# Roadbook PWA — nginx site config
+#
+# The cache headers here are the whole point. Get them wrong and the service
+# worker either never updates, or updates so eagerly it re-downloads the shell
+# on every load. The rule:
+#
+#   sw.js, index.html, app code  -> no-cache (revalidate every time, cheap 304s)
+#   vendor/, icons               -> immutable, long TTL
+#
+# The tile cache is managed by the service worker in Cache Storage and is not
+# affected by any of this.
+# =============================================================================
+
+server {
+    listen       ${PORT};
+    listen       [::]:${PORT};
+    server_name  _;
+
+    root  /usr/share/nginx/html;
+    index index.html;
+
+    include /etc/nginx/mime.extra.types;
+    charset utf-8;
+
+    # ---- compression ------------------------------------------------------
+    gzip              on;
+    gzip_vary         on;
+    gzip_min_length   256;
+    gzip_proxied      any;
+    gzip_comp_level   6;
+    gzip_types        text/plain text/css text/xml application/javascript
+                      application/json application/manifest+json image/svg+xml
+                      application/gpx+xml application/vnd.google-earth.kml+xml
+                      text/markdown;
+
+    # Serve the .gz files baked at build time when the client accepts them.
+    gzip_static       on;
+
+    # ---- security ---------------------------------------------------------
+    server_tokens off;
+    add_header X-Content-Type-Options  "nosniff"            always;
+    add_header X-Frame-Options         "SAMEORIGIN"         always;
+    add_header Referrer-Policy         "no-referrer-when-downgrade" always;
+    # geolocation MUST stay enabled for self — the map's Find me depends on it
+    add_header Permissions-Policy      "geolocation=(self), camera=(), microphone=()" always;
+
+    # ---- health check -----------------------------------------------------
+    location = /healthz {
+        access_log off;
+        add_header Content-Type text/plain;
+        return 200 "ok\n";
+    }
+
+    # ---- service worker ---------------------------------------------------
+    # Never cache the worker itself. If a browser serves a stale sw.js the app
+    # can get pinned to an old shell effectively forever.
+    location = /sw.js {
+        add_header Cache-Control "no-cache, no-store, must-revalidate" always;
+        add_header Service-Worker-Allowed "/" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        types { } default_type "application/javascript; charset=utf-8";
+        try_files $uri =404;
+    }
+
+    # ---- app shell: revalidate, don't blind-cache -------------------------
+    location ~* ^/(index\.html|app\.js|precache\.js|route-data\.js|sheet\.js)$ {
+        add_header Cache-Control "no-cache" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    location = /manifest.webmanifest {
+        add_header Cache-Control "no-cache" always;
+        default_type application/manifest+json;
+        try_files $uri =404;
+    }
+
+    # ---- vendored libraries: pinned version, cache hard -------------------
+    location ^~ /vendor/ {
+        add_header Cache-Control "public, max-age=31536000, immutable" always;
+        access_log off;
+        try_files $uri =404;
+    }
+
+    location = /icon.svg {
+        add_header Cache-Control "public, max-age=604800" always;
+        try_files $uri =404;
+    }
+
+    # ---- route files: force a download rather than an in-tab render -------
+    location ^~ /downloads/ {
+        add_header Cache-Control "public, max-age=86400" always;
+        add_header Content-Disposition "attachment" always;
+        try_files $uri =404;
+    }
+
+    # ---- everything else --------------------------------------------------
+    location / {
+        try_files $uri $uri/ =404;
+    }
+
+    # Keep 404s cheap and quiet.
+    error_page 404 = @notfound;
+    location @notfound {
+        add_header Content-Type text/plain always;
+        return 404 "not found\n";
+    }
+}

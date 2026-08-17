@@ -1,0 +1,14 @@
+{
+  "name": "Roadbook — Dubai to Salalah",
+  "short_name": "Roadbook",
+  "description": "Offline-first route map for the Dubai to Salalah drive.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0F0E0C",
+  "theme_color": "#0F0E0C",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

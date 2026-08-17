@@ -1,0 +1,20 @@
+# koyeb.com — free instance, Docker native.
+#   koyeb app init roadbook --docker <your-image> --ports 8080:http --routes /:8080
+name: roadbook-salalah
+services:
+  - name: web
+    instance_type: free
+    regions: [fra]
+    ports:
+      - port: 8080
+        protocol: http
+    routes:
+      - path: /
+        port: 8080
+    health_checks:
+      - http:
+          port: 8080
+          path: /healthz
+    env:
+      - key: PORT
+        value: "8080"

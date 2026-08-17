@@ -1,0 +1,10 @@
+# MIME types nginx's default table is missing.
+# Deliberately does NOT redefine svg/js/json — nginx's built-in mime.types
+# already covers those, and redeclaring them logs a duplicate-extension warning
+# on every boot.
+types {
+    application/manifest+json             webmanifest;
+    application/gpx+xml                   gpx;
+    application/vnd.google-earth.kml+xml  kml;
+    text/markdown                         md;
+}

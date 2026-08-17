@@ -1,0 +1,18 @@
+# Local run. http://localhost:8080
+#
+# Service workers are allowed on http://localhost (it counts as a secure
+# context), so offline caching is fully testable here — no TLS needed.
+services:
+  roadbook:
+    build: .
+    image: roadbook-pwa:local
+    ports:
+      - "8080:8080"
+    environment:
+      PORT: "8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
