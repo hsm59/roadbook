@@ -400,22 +400,58 @@ const RoadbookSheet = (function () {
     }
     return null;
   }
+  /* Which day the peek describes: whichever tab is open, or — on Prep — the
+     day holding the next thing you have not done. */
+  function peekDay() {
+    if (state.tab !== "prep") return +state.tab.slice(1);
+    const e = nextStop();
+    return e ? e.day : DAYS[DAYS.length - 1];
+  }
+  /* The next stop within one day, rather than across the trip. */
+  function nextInDay(day) {
+    return dayList(day).find(e => !state.done[e.key] && !state.skip[e.key]) || null;
+  }
+
+  /* The collapsed sheet is the only thing on screen while you drive, so it
+     carries the day, not just one stop: what today is, where you are going
+     next and when, and how much of the day is left. */
   function renderPeek() {
-    const e = nextStop(), el = $("#peekBody");
+    const day = peekDay(), meta = ROUTE.days[day], el = $("#peekBody");
+    const list = dayList(day), sch = schedule(day);
+    const e = nextInDay(day);
+    const doneCount = list.filter(x => state.done[x.key]).length;
+    const rows = RoadbookWeather.has() ? weatherRows(day).filter(r => r.wx) : [];
+    const span = rows.length ? RoadbookWeather.span(rows) : null;
+    const dep = parse(state.depart[day]) ?? parse(meta.depart);
+
+    const head =
+      `<div class="pk-top">
+         <b>${esc(meta.tab)}</b>
+         <span>${esc(meta.leg)}</span>
+         <span class="grow"></span>
+         ${span ? `<i>${span.glyph}</i><u>${span.lo}°–${span.hi}°</u>` : ""}
+       </div>`;
+
+    const foot =
+      `<div class="pk-meta">${dayKm(day)} km · ${fmt(dep)}–${fmt(sch[sch.length - 1].arrive)}
+         · ${doneCount} of ${list.length} done</div>`;
+
     if (!e) {
-      el.innerHTML = `<div class="pk-kick">Trip complete</div>
-        <div class="pk-name">Home<span class="pk-far">every stop done</span></div>`;
+      el.innerHTML = head +
+        `<div class="pk-main"><div class="pk-name">Day complete
+           <span class="pk-far">every stop ticked off</span></div>
+         <div class="pk-num"><b>✓</b><i>in ${fmt(sch[sch.length - 1].arrive)}</i></div></div>` + foot;
       return;
     }
-    const sch = schedule(e.day);
-    const eta = fmt(sch[e.i].arrive);
-    const wx = RoadbookWeather.atStop(e.gi, ROUTE.days[e.day].date, sch[e.i].arrive);
+
+    const wx = RoadbookWeather.atStop(e.gi, meta.date, sch[e.i].arrive);
     const first = e.i === 0;
-    el.innerHTML =
-      `<div class="pk-kick">Next · ${esc(ROUTE.days[e.day].tab)} · ${e.i + 1} of ${dayList(e.day).length}</div>
-       <div class="pk-name">${esc(e.name)}<span class="pk-far">${esc(e.leg.sub)}</span></div>
-       <div class="pk-num">${first ? "<b>Start</b>" : `<b>${e.leg.km}</b><small>km</small>`}
-         <i>${first ? "Depart " : "ETA "}${eta}${wx ? ` · ${Math.round(wx.temp)}°` : ""}</i></div>`;
+    el.innerHTML = head +
+      `<div class="pk-main">
+         <div class="pk-name">${esc(e.name)}<span class="pk-far">${esc(e.leg.sub)}</span></div>
+         <div class="pk-num">${first ? "<b>Start</b>" : `<b>${e.leg.km}</b><small>km</small>`}
+           <i>${first ? "Depart " : ""}${fmt(sch[e.i].arrive)}${wx ? ` · ${Math.round(wx.temp)}°` : ""}</i></div>
+       </div>` + foot;
   }
 
   /* ---------------- prep view ---------------- */
@@ -795,8 +831,11 @@ const RoadbookSheet = (function () {
     buildTabs();
     peekEl.addEventListener("click", ev => {
       if (ev.target.closest("#grab")) return;
-      const e = nextStop();
-      if (e) { state.open[e.key] = true; state.tab = "d" + e.day; render(); syncMap(); }
+      const day = peekDay();
+      const e = nextInDay(day);
+      state.tab = "d" + day;
+      if (e) state.open[e.key] = true;
+      render(); syncMap();
       snapTo(DET.HALF);
       if (e) focusStop(e.gi);
     });

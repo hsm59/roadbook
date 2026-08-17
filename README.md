@@ -4,9 +4,14 @@ Leaflet + Service Worker + Cache API. No build step, no framework, no state libr
 Leaflet is vendored locally, so nothing is fetched from a CDN at runtime.
 
 One page: the map, with the roadbook as a bottom sheet over it. The sheet has
-three detents — peek (next stop, distance, ETA), half, and full — and tapping a
-checkpoint flies the map to it and opens its popup, offset so the pin lands in
-the part of the map the sheet is not covering.
+three detents — peek, half and full — and tapping a checkpoint flies the map to
+it and opens its popup, offset so the pin lands in the part of the map the sheet
+is not covering.
+
+Collapsed, the sheet still describes the open day: which day and leg it is, its
+temperature range, the next stop with distance and ETA, and the day's total,
+window and progress. That is the only thing on screen while you drive, so it
+carries the day rather than a single stop.
 
 ## The one hard requirement
 
@@ -48,7 +53,7 @@ standalone app and keeps its caches.
 
 Two caches, on purpose:
 
-- `roadbook-shell-v7` — app code. Versioned, wiped on every deploy. Bump `VERSION`
+- `roadbook-shell-v8` — app code. Versioned, wiped on every deploy. Bump `VERSION`
   in `sw.js` when you change any shell file.
 - `roadbook-tiles` — **unversioned and never wiped on activate.** Re-downloading
   several thousand tiles in the desert because you shipped a CSS fix is not a
