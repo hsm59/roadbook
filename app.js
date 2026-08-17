@@ -74,6 +74,7 @@ const RoadbookMap = (function () {
   const markers = [];
   function addMarkers() {
     const group = L.layerGroup().addTo(map);
+    markerGroup = group;
     ROUTE.stops.forEach(function (place, i) {
       const m = L.marker([place.lat, place.lng], {
         icon: markerIcon(place.type, i + 1),
@@ -88,10 +89,70 @@ const RoadbookMap = (function () {
     return group;
   }
 
+  let routeLines = [];
   function addRouteLine() {
     // casing underneath, bright core on top — readable on both basemaps
-    L.polyline(ROUTE.line, { color: "#000", weight: 8, opacity: 0.35, lineJoin: "round" }).addTo(map);
-    return L.polyline(ROUTE.line, { color: "#F5A623", weight: 3.5, lineJoin: "round" }).addTo(map);
+    routeLines = [
+      L.polyline(ROUTE.line, { color: "#000", weight: 8, opacity: 0.35, lineJoin: "round" }).addTo(map),
+      L.polyline(ROUTE.line, { color: "#F5A623", weight: 3.5, lineJoin: "round" }).addTo(map)
+    ];
+    return routeLines[1];
+  }
+
+  /* Show only the places a given day actually visits.
+     On a sightseeing day the 1,300 km highway line is noise — you are
+     pottering around Salalah, not driving to Dubai — so it comes off the map
+     and the view fits the day's own spots. */
+  let markerGroup = null, excursionLines = [];
+  function clearExcursion() {
+    excursionLines.forEach(function (l) { map.removeLayer(l); });
+    excursionLines = [];
+  }
+  function drawExcursion(day) {
+    const geom = (ROUTE.excursions || {})[day];
+    if (!geom) return;
+    excursionLines = [
+      L.polyline(geom, { color: "#000", weight: 7, opacity: 0.35, lineJoin: "round" }).addTo(map),
+      L.polyline(geom, { color: "#4FB3C4", weight: 3, lineJoin: "round" }).addTo(map)
+    ];
+  }
+
+  function showDay(day) {
+    const spec = ROUTE.days[day];
+    if (!spec || !markerGroup) return;
+    const wanted = new Set(spec.legs.map(function (l) { return l.at; }));
+    const pts = [];
+    markers.forEach(function (m, i) {
+      if (wanted.has(i)) {
+        if (!markerGroup.hasLayer(m)) markerGroup.addLayer(m);
+        pts.push(m.getLatLng());
+      } else if (markerGroup.hasLayer(m)) {
+        markerGroup.removeLayer(m);
+      }
+    });
+
+    const driving = spec.kind !== "explore";
+    routeLines.forEach(function (l) {
+      if (driving) { if (!map.hasLayer(l)) l.addTo(map); }
+      else if (map.hasLayer(l)) map.removeLayer(l);
+    });
+    clearExcursion();
+    if (!driving) {
+      drawExcursion(day);
+      (ROUTE.excursions || {})[day] &&
+        ROUTE.excursions[day].forEach(function (c) { pts.push(L.latLng(c[0], c[1])); });
+    }
+
+    if (pts.length) {
+      map.fitBounds(L.latLngBounds(pts), { padding: [30, 30], maxZoom: 13 });
+    }
+  }
+
+  function showAll() {
+    clearExcursion();
+    markers.forEach(function (m) { if (!markerGroup.hasLayer(m)) markerGroup.addLayer(m); });
+    routeLines.forEach(function (l) { if (!map.hasLayer(l)) l.addTo(map); });
+    map.fitBounds(routeBounds, { padding: [10, 10] });
   }
 
   function init(containerId) {
@@ -184,6 +245,8 @@ const RoadbookMap = (function () {
     nearestStop: nearestStop,
     getMap: function () { return map; },
     getBounds: function () { return routeBounds; },
+    showDay: showDay,
+    showAll: showAll,
 
     /* Centre a stop in the map area the sheet is NOT covering.
        coveredPx is how much of the viewport the sheet occupies; shifting

@@ -76,6 +76,17 @@ const RoadbookSheet = (function () {
     });
   }
 
+  /* Stops are keyed "<day>:<legIndex>". Renumbering the days — which happened
+     when the Salalah days were inserted between the drive out and the drive
+     home — silently repoints every saved tick at a different stop. Bump this
+     whenever day numbers move, and stale progress is dropped rather than
+     shown against the wrong place. */
+  const SCHEMA = 2;
+  if (store.get("schema", 1) !== SCHEMA) {
+    store.set("done", {});
+    store.set("schema", SCHEMA);
+  }
+
   const state = {
     depart: {}, anchor: {},
     open: {}, done: store.get("done", {}), sat: {}, satz: {},
@@ -435,6 +446,7 @@ const RoadbookSheet = (function () {
     el.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => {
       state.tab = t.dataset.view;
       render();
+      syncMap();
       if (current === DET.PEEK) snapTo(DET.HALF);
       scroller.scrollTop = 0;
     }));
@@ -524,7 +536,7 @@ const RoadbookSheet = (function () {
         });
     });
     $$("[data-wxday]").forEach(r => {
-      const go = () => { state.tab = "d" + r.dataset.wxday; render(); scroller.scrollTop = 0; };
+      const go = () => { state.tab = "d" + r.dataset.wxday; render(); syncMap(); scroller.scrollTop = 0; };
       r.addEventListener("click", go);
       r.addEventListener("keydown", ev => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); go(); } });
     });
@@ -595,6 +607,13 @@ const RoadbookSheet = (function () {
   function focusStop(gi, collapse) {
     if (collapse && current === DET.FULL) snapTo(DET.HALF);
     RoadbookMap.focusStop(gi, coveredPx());
+  }
+
+  /* Show the selected day's places and nothing else. On Prep, show everything.
+     Sightseeing days drop the highway line — see RoadbookMap.showDay. */
+  function syncMap() {
+    if (state.tab === "prep") RoadbookMap.showAll();
+    else RoadbookMap.showDay(+state.tab.slice(1));
   }
 
   /* ---------------- sheet mechanics ---------------- */
@@ -716,12 +735,13 @@ const RoadbookSheet = (function () {
     peekEl.addEventListener("click", ev => {
       if (ev.target.closest("#grab")) return;
       const e = nextStop();
-      if (e) { state.open[e.key] = true; state.tab = "d" + e.day; render(); }
+      if (e) { state.open[e.key] = true; state.tab = "d" + e.day; render(); syncMap(); }
       snapTo(DET.HALF);
       if (e) focusStop(e.gi);
     });
     bindDrag();
     render();
+    syncMap();
     measure();
     window.addEventListener("resize", measure);
     window.addEventListener("orientationchange", measure);

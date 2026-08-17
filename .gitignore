@@ -1,2 +1,2 @@
-# Local copy of what the Pages workflow uploads; rebuilt by CI on every run.
 _site/
+__pycache__/

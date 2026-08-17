@@ -286,9 +286,11 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
   var totalKm = days.reduce(function (t, d) {
     return t + ROUTE.days[d].legs.reduce(function (a, l) { return a + l.km; }, 0);
   }, 0);
+  var driveDays = days.filter(function (d) { return ROUTE.days[d].kind !== "explore"; }).length;
   document.getElementById("title").firstChild.nodeValue = ROUTE.name;
   document.getElementById("sub").textContent =
-    ROUTE.dates + " · " + days.length + " driving days · " + totalKm.toLocaleString() + " km";
+    ROUTE.dates + " · " + driveDays + " on the road, " + (days.length - driveDays) +
+    " in Dhofar · " + totalKm.toLocaleString() + " km";
   RoadbookSheet.init();
 
   /* Keep the floating map buttons clear of the sheet as it moves, and get them

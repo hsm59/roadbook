@@ -62,10 +62,15 @@ const TilePrecache = (function () {
 
   /* ---------------- what to cache, tier by tier ----------------
      Wide and cheap at low zoom; tight and detailed at high zoom. */
+  /* The highway corridor does not help you in Salalah. The sightseeing days
+     run 190–225 km on roads that are nowhere near the Dubai route, so they
+     get their own corridor — otherwise you have cached the desert and not
+     the mountain you are actually driving on. */
   const PLAN = [
     { label: "Region overview", zooms: [6, 7, 8, 9], along: "route", radiusKm: 40, stepKm: 20 },
     { label: "Corridor",        zooms: [10, 11],     along: "route", radiusKm: 15, stepKm: 8  },
     { label: "Road detail",     zooms: [12, 13],     along: "route", radiusKm: 6,  stepKm: 3  },
+    { label: "Salalah days",    zooms: [10, 11, 12, 13], along: "excursions", radiusKm: 5, stepKm: 3 },
     { label: "Around stops",    zooms: [14, 15],     along: "stops", radiusKm: 2.5, stepKm: 0 }
   ];
 
@@ -73,9 +78,18 @@ const TilePrecache = (function () {
   function buildTileKeys(plan) {
     const keys = new Set();
     (plan || PLAN).forEach(function (tier) {
-      const pts = tier.along === "stops"
-        ? ROUTE.stops.map(function (s) { return [s.lat, s.lng]; })
-        : densify(ROUTE.line, tier.stepKm);
+      let pts;
+      if (tier.along === "stops") {
+        pts = ROUTE.stops.map(function (s) { return [s.lat, s.lng]; });
+      } else if (tier.along === "excursions") {
+        pts = [];
+        Object.keys(ROUTE.excursions || {}).forEach(function (k) {
+          pts = pts.concat(densify(ROUTE.excursions[k], tier.stepKm));
+        });
+      } else {
+        pts = densify(ROUTE.line, tier.stepKm);
+      }
+      if (!pts.length) return;
       tier.zooms.forEach(function (z) {
         if (z > MAX_ZOOM || z < MIN_ZOOM) return;   // respect the ceiling
         pts.forEach(function (p) { tilesAround(p[0], p[1], z, tier.radiusKm, keys); });

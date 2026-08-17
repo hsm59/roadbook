@@ -48,7 +48,7 @@ standalone app and keeps its caches.
 
 Two caches, on purpose:
 
-- `roadbook-shell-v2` — app code. Versioned, wiped on every deploy. Bump `VERSION`
+- `roadbook-shell-v5` — app code. Versioned, wiped on every deploy. Bump `VERSION`
   in `sw.js` when you change any shell file.
 - `roadbook-tiles` — **unversioned and never wiped on activate.** Re-downloading
   several thousand tiles in the desert because you shipped a CSS fix is not a
@@ -66,10 +66,17 @@ rises:
 | Region overview | 6–9 | 40 km | 149 |
 | Corridor | 10–11 | 15 km | 395 |
 | Road detail | 12–13 | 6 km | 2,243 |
-| Around stops | 14–15 | 2.5 km | 854 |
+| Salalah days | 10–13 | 5 km | 337 |
+| Around stops | 14–15 | 2.5 km | 1,623 |
 
-**3,641 unique tiles.** Doubled across the two basemaps that is 7,282 requests,
-roughly 128 MB. Tune the tiers in `PLAN`.
+**4,672 unique tiles.** Doubled across the two basemaps that is 9,344 requests,
+roughly 164 MB. Tune the tiers in `PLAN`.
+
+The highway corridor is no use in Dhofar, so the sightseeing days get their own:
+`along: "excursions"` buffers `ROUTE.excursions`, the router geometry for those
+days. Without it you would have cached 1,300 km of desert and none of the
+mountain road you actually spend Thursday on. It costs only 337 extra tiles
+because it overlaps the corridor near Salalah.
 
 ## Where `ROUTE.line` comes from
 
@@ -105,7 +112,7 @@ A flat list of stops would put two markers on each coordinate and label the
 borders wrongly — Mezyad is the UAE **exit** going out and the UAE **entry**
 coming home. So the data splits in two:
 
-- `ROUTE.stops` — the 13 physical places. Name, position, marker type. One
+- `ROUTE.stops` — the physical places. Name, position, marker type. One
   marker each. This is also what `precache.js` buffers and what `weather.js`
   asks the forecast about.
 - `ROUTE.days[n].legs` — one visit to one place on one day: `at` (index into
@@ -120,8 +127,14 @@ south does not tick it off on the way home.
 the distance table and the peek all build themselves from it. 20–21 Aug are in
 Salalah and deliberately absent until they are planned.
 
-Round trip is 2,618 km: 1,309 out, 1,309 back. The precache is unchanged by the
-return — same road, same tiles.
+Round trip is 2,618 km of highway: 1,309 out, 1,309 back. The two Dhofar days
+add another 419 km, for 3,051 km all in.
+
+`ROUTE.stops` holds 28 places — the 13 highway stops plus 15 Dhofar sights, all
+on OpenStreetMap coordinates rather than estimates. A day marked
+`kind: "explore"` drops the highway line from the map, draws its own route from
+`ROUTE.excursions`, and fits the view to that day's spots: tapping **Thu 20**
+shows the eastern mountains, not the road to Dubai.
 
 ## Weather
 
@@ -135,7 +148,7 @@ Two levels: a **trip summary** at the top of every day — one row per day with 
 temperature range and worst hazard, tap to jump — and the **per-stop conditions**
 inside each stop card, with a temperature on the collapsed row.
 
-Open-Meteo, keyless and CORS-enabled; all 13 places come back in one request.
+Open-Meteo, keyless and CORS-enabled; all 28 places come back in one request.
 Cached in `localStorage` (~16 KB) rather than the Cache API, so clearing tiles
 does not clear it. Offline, the last fetch is shown with its age stated.
 
