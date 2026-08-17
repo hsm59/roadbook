@@ -119,7 +119,7 @@ const ROUTE = {
     /* ---- return ---- */
     3: { label: "Sat 22 Aug", tab: "Sat 22", date: "2026-08-22", depart: "14:00",
          leg: "Salalah → Haima",
-         blurb: "499 km, about 5 h 10 m driving. A deliberately short first half of the return: a 14:00 start puts the mountain climb in daylight and leaves the long empty stretch to Haima for the evening. Sunset is near 18:40, so the last two hours are dark.",
+         blurb: "499 km, about 5 h 10 m driving. A deliberately short first half of the return: a 14:00 start puts the mountain climb in daylight and leaves the long empty stretch to Haima for the evening. Sunset is near 18:40, so the last two hours are dark. Leaving at 14:00, Haima is the only overnight worth stopping at — Qitbit at 17:20 is too early to be worth it and Adam is 23:20.",
          legs: [
       { at:12, sub:"Departure", km:0, drive:0, stay:0, fuel:false,
         svc:["Fill up here","Water"],
@@ -137,9 +137,9 @@ const ROUTE = {
         svc:["Fuel","Family washroom","Restaurants","Mosque","Tyre repair"],
         note:"Same pair of stations as on the way down: Shell one side, motel the other, motel side cleaner. Eat here rather than at Haima — you will be arriving at Haima in the dark and wanting to stop, not to queue.",
         lm:"A cluster of low buildings either side of a dead-straight road, mosque and Shell canopy. Easy to overshoot at night." },
-      { at:8, sub:"Overnight", km:227, drive:130, stay:0, fuel:true,
+      { at:8, sub:"Overnight — room not booked", km:227, drive:130, stay:0, fuel:true,
         svc:["Bed","Fuel","Restaurants","Clean washroom","Garage"],
-        note:"Overnight at Haima. Book ahead — the rest houses here are small and this is the only real accommodation for hundreds of kilometres, so turning up and hoping is not a plan. Fill the tank tonight rather than in the morning; it saves a stop on a 810 km day.",
+        note:"Overnight at Haima, and the room is still to be sorted. Haima has the best facilities on this whole empty stretch — restaurants, a bank, a garage — but the lodging is rest houses and motels rather than anywhere you would pick for its own sake. Ring ahead instead of arriving at 20:00 and hoping: there is nothing else for hundreds of kilometres in either direction, so this is not a place to be turned away. Fill the tank tonight, not in the morning — it saves a stop on an 810 km day.",
         lm:"The water tower and the bus station are the landmarks. The Duqm road joins from the east just before town." }
     ] },
 
