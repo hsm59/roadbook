@@ -7,7 +7,7 @@
              option. Cleared only when the user asks.
    ============================================================ */
 
-const VERSION     = "v5";
+const VERSION     = "v6";
 const SHELL_CACHE = "roadbook-shell-" + VERSION;
 const TILE_CACHE  = "roadbook-tiles";        // intentionally unversioned
 

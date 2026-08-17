@@ -144,12 +144,12 @@ const ROUTE = {
         note:"The one everybody comes to Dhofar for in khareef: travertine pools, a waterfall running only in monsoon, and hillsides that are properly green. Give it the full hour and three quarters — there are pedalos on the lower lake, cafés, and camels everywhere. It gets busy from late morning, which is why it sits here and not at midday.",
         lm:"Up the valley behind Taqah. The road climbs into cloud, then the lakes open out on your left." },
 
-      { at:16, sub:"Midday — sinkhole", km:17, drive:20, stay:50, fuel:false,
+      { at:16, sub:"Midday — sinkhole", km:17, drive:20, stay:50, fuel:false, optional:true,
         svc:["Sinkhole","Viewpoint","Rough last stretch"],
         note:"Tawi Atair, the 'well of birds' — a vast collapsed sinkhole in the limestone. The coordinate here is the village; the sinkhole itself is signposted from it and the final approach is a short unsealed spur, so park where the surface stops being good rather than pushing the car down it.",
         lm:"Village on the plateau road. Follow the brown sign; the viewing platform is a few minutes' walk from the parking." },
 
-      { at:17, sub:"Baobabs", km:10, drive:11, stay:30, fuel:false,
+      { at:17, sub:"Baobabs", km:10, drive:11, stay:30, fuel:false, optional:true,
         svc:["Photo stop","Short walk"],
         note:"Wadi Hanna, the only place on the Arabian peninsula with a stand of baobabs. Twenty minutes and a walk down the slope is plenty unless you are photographing them properly.",
         lm:"Signposted off the Tawi Atair road, trees visible from the tarmac." },

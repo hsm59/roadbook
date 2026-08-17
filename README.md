@@ -48,7 +48,7 @@ standalone app and keeps its caches.
 
 Two caches, on purpose:
 
-- `roadbook-shell-v5` — app code. Versioned, wiped on every deploy. Bump `VERSION`
+- `roadbook-shell-v6` — app code. Versioned, wiped on every deploy. Bump `VERSION`
   in `sw.js` when you change any shell file.
 - `roadbook-tiles` — **unversioned and never wiped on activate.** Re-downloading
   several thousand tiles in the desert because you shipped a CSS fix is not a
@@ -122,6 +122,11 @@ coming home. So the data splits in two:
 
 A stop is identified by `"<day>:<legIndex>"`, so ticking Haima off on the way
 south does not tick it off on the way home.
+
+A leg marked `optional: true` can be dropped on the day itself. Skipping gives
+back its `stay` but not its `drive` — both optional stops are waypoints on a
+road you are driving regardless, so you pass them either way and simply do not
+get out. Thursday runs 13 h 29 m with both in and 12 h 9 m with both out.
 
 **Adding a day means adding one `days` entry.** Tabs, the trip weather summary,
 the distance table and the peek all build themselves from it. 20–21 Aug are in

@@ -89,7 +89,8 @@ const RoadbookSheet = (function () {
 
   const state = {
     depart: {}, anchor: {},
-    open: {}, done: store.get("done", {}), sat: {}, satz: {},
+    open: {}, done: store.get("done", {}), skip: store.get("skip", {}),
+    sat: {}, satz: {},
     tab: "d" + DAYS[0]
   };
   DAYS.forEach(d => {
@@ -97,6 +98,9 @@ const RoadbookSheet = (function () {
     state.anchor[d] = null;
   });
 
+  /* Skipping an optional stop gives back its `stay` but not its `drive`: both
+     optional stops are waypoints on the road you are driving anyway, so you
+     pass them either way — you just do not get out. */
   function schedule(day) {
     const list = dayList(day);
     let t = parse(state.depart[day]);
@@ -105,9 +109,12 @@ const RoadbookSheet = (function () {
       if (i > 0) t += e.leg.drive;
       if (state.anchor[day] && state.anchor[day].key === e.key) t = state.anchor[day].t;
       const arrive = t;
-      t += e.leg.stay;
+      if (!state.skip[e.key]) t += e.leg.stay;
       return { arrive, leave: t };
     });
+  }
+  function savedBySkipping(day) {
+    return dayList(day).reduce((m, e) => m + (state.skip[e.key] ? e.leg.stay : 0), 0);
   }
   function kmRemaining(list, i) {
     let k = 0;
@@ -287,7 +294,12 @@ const RoadbookSheet = (function () {
       <span class="grow"></span>
       <span class="mono tiny muted">${dayKm(day)} km · ${dur(sch[sch.length - 1].arrive - dep)}</span>
     </div>
-    <p class="tiny muted" style="margin:10px 2px 14px">${esc(meta.blurb)}</p>`;
+    <p class="tiny muted" style="margin:10px 2px 14px">${esc(meta.blurb)}</p>` +
+    (savedBySkipping(day)
+      ? `<div class="skipbar">Skipping ${dayList(day).filter(e => state.skip[e.key]).length}
+           optional stop${dayList(day).filter(e => state.skip[e.key]).length > 1 ? "s" : ""} ·
+           home ${dur(savedBySkipping(day))} earlier</div>`
+      : "");
 
     list.forEach((e, i) => {
       const l = e.leg, key = e.key;
@@ -299,11 +311,12 @@ const RoadbookSheet = (function () {
         const warn = l.km >= 180;
         h += `<div class="gap ${warn ? "warn" : ""}">${warn ? "&#9888; " : ""}${l.km} km · ${dur(l.drive)} driving${warn ? " · longest gap without fuel" : ""}</div>`;
       }
-      h += `<article class="stop ${l.fuel ? "fuel" : ""} ${done ? "done" : ""} ${i === 0 ? "origin" : ""}" data-key="${key}">
+      const skipped = !!state.skip[key];
+      h += `<article class="stop ${l.fuel ? "fuel" : ""} ${done ? "done" : ""} ${i === 0 ? "origin" : ""} ${l.optional ? "opt" : ""} ${skipped ? "skipped" : ""}" data-key="${key}">
         <div class="stophd" data-toggle="${key}" role="button" tabindex="0">
           <div class="eta">${fmt(sch[i].arrive)}${wx ? `<em>${Math.round(wx.temp)}° ${wx.glyph}</em>` : ""}</div>
           <div class="num" style="--pin:${(ROUTE.types[e.type] || {}).color || "#888"}">${e.gi + 1}</div>
-          <div class="sname">${esc(e.name)}<small>${esc(l.sub.toUpperCase())}${l.stay ? " · " + l.stay + " MIN" : ""}</small></div>
+          <div class="sname">${esc(e.name)}${l.optional ? '<span class="optflag">optional</span>' : ""}<small>${esc(l.sub.toUpperCase())}${l.stay && !skipped ? " · " + l.stay + " MIN" : ""}${skipped ? " · SKIPPED" : ""}</small></div>
           <div class="chev">${open ? "▲" : "▼"}</div>
         </div>
         <div class="stopbody ${open ? "" : "hide"}">
@@ -320,6 +333,7 @@ const RoadbookSheet = (function () {
             <a class="btn" href="geo:${e.lat},${e.lng}?q=${e.lat},${e.lng}(${encodeURIComponent(e.name)})">Any map app</a>
             <button class="btn" data-here="${key}">I'm here now</button>
             <button class="btn" data-done="${key}">${done ? "Undo" : "Mark done"}</button>
+            ${l.optional ? `<button class="btn ${skipped ? "on" : ""}" data-skip="${key}">${skipped ? "Put it back" : "Skip · save " + l.stay + " min"}</button>` : ""}
           </div>
           ${state.sat[key] ? `<div class="sat" id="sat-${key}" data-gi="${e.gi}">
             <div class="satgrid"></div><div class="xhair"></div>
@@ -342,7 +356,10 @@ const RoadbookSheet = (function () {
   function nextStop() {
     for (const d of DAYS) {
       const list = dayList(d);
-      for (let i = 0; i < list.length; i++) if (!state.done[list[i].key]) return list[i];
+      for (let i = 0; i < list.length; i++) {
+        const e = list[i];
+        if (!state.done[e.key] && !state.skip[e.key]) return e;
+      }
     }
     return null;
   }
@@ -515,6 +532,10 @@ const RoadbookSheet = (function () {
     $$("[data-done]").forEach(b => b.addEventListener("click", () => {
       const key = b.dataset.done; state.done[key] = !state.done[key];
       store.set("done", state.done); render();
+    }));
+    $$("[data-skip]").forEach(b => b.addEventListener("click", () => {
+      const key = b.dataset.skip; state.skip[key] = !state.skip[key];
+      store.set("skip", state.skip); render();
     }));
 
     Object.keys(state.sat).forEach(k => { if (state.sat[k]) paintSat(k); });

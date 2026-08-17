@@ -144,6 +144,15 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 .stop.fuel{border-left:3px solid var(--amber)}
 .stop.done{opacity:.55}
 .stop.origin{border-style:dashed}
+/* optional stops: kept in the plan, droppable on the day */
+.stop.opt{border-left:3px dashed var(--dim)}
+.stop.skipped{opacity:.45}
+.stop.skipped .sname{text-decoration:line-through}
+.optflag{font-family:var(--mono);font-size:8.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--dim);border:1px solid var(--line);border-radius:20px;padding:1px 6px;margin-left:6px;
+  vertical-align:middle;font-weight:400}
+.skipbar{font-family:var(--mono);font-size:11px;color:var(--amber);background:var(--panel2);
+  border:1px dashed var(--amber);border-radius:8px;padding:8px 10px;margin:0 0 12px;line-height:1.5}
 .stophd{display:flex;align-items:center;gap:10px;padding:11px 12px;cursor:pointer}
 .stophd:focus-visible{outline:2px solid var(--blue);outline-offset:-2px}
 .eta{font-family:var(--mono);font-size:12px;color:var(--amber);min-width:44px}
