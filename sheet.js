@@ -227,24 +227,61 @@ const RoadbookSheet = (function () {
     }));
   }
 
-  function renderTripWeather(activeDay) {
-    if (!RoadbookWeather.has()) {
-      return `<div class="wx"><div class="wxhd"><span>Trip weather</span><span class="grow"></span>
-        <button class="btn ghost" id="wxGet">${navigator.onLine ? "Load" : "Offline"}</button></div>
-        <p class="tiny muted" style="margin:0 12px 10px">${navigator.onLine
-          ? "Not loaded yet. Fetch it on wifi and it stays on the device for the drive."
-          : "No forecast stored. Connect once and it is kept for the trip."}</p></div>`;
+  const wxMissing = () => `<p class="tiny muted" style="margin:0 12px 10px">${navigator.onLine
+    ? "Not loaded yet. Fetch it on wifi and it stays on the device for the drive."
+    : "No forecast stored. Connect once and it is kept for the trip."}</p>`;
+  const wxShell = (title, inner) =>
+    `<div class="wx"><div class="wxhd"><span>${esc(title)}</span><span class="grow"></span>
+      <button class="btn ghost" id="wxGet">${navigator.onLine ? "Load" : "Offline"}</button></div>
+      ${inner}</div>`;
+
+  /* The day view shows only its own day. The whole-trip table moved to Prep,
+     which is where you plan — on the road, five other days are just noise. */
+  function renderDayWeather(day) {
+    const meta = ROUTE.days[day];
+    if (!RoadbookWeather.has()) return wxShell(meta.tab + " weather", wxMissing());
+
+    const rows = weatherRows(day).filter(r => r.wx);
+    if (!rows.length) {
+      return wxShell(meta.tab + " weather",
+        `<p class="tiny muted" style="margin:0 12px 10px">The stored forecast doesn't cover
+         ${meta.date}. Forecasts run about 16 days ahead — reload nearer the time.</p>`);
     }
+    const s = RoadbookWeather.span(rows);
+    const warns = RoadbookWeather.warnings(rows);
+    const hot = rows.reduce((a, b) => b.wx.feels > a.wx.feels ? b : a);
+    const cool = rows.reduce((a, b) => b.wx.temp < a.wx.temp ? b : a);
+
+    return `<div class="wx">
+      <div class="wxhd">
+        <span>${esc(meta.tab)} weather</span>
+        <i class="wxglyph">${s.glyph}</i>
+        <b class="mono">${s.lo}°–${s.hi}°C</b>
+        <span class="grow"></span>
+        <span class="tiny muted">${navigator.onLine ? "" : "offline · "}${RoadbookWeather.age()}</span>
+        <button class="btn ghost" id="wxGet" aria-label="Refresh forecast">↻</button>
+      </div>
+      <div class="wxspread">
+        <span>${esc(s.label)} across the day</span>
+        <span>warmest <b>${esc(hot.name)}</b> ${Math.round(hot.wx.feels)}° felt, ${hot.time}</span>
+        <span>coolest <b>${esc(cool.name)}</b> ${Math.round(cool.wx.temp)}°, ${cool.time}</span>
+      </div>
+      ${warns.length
+        ? warns.map(w => `<div class="wxwarn ${w.level}">${esc(w.text)}</div>`).join("")
+        : `<div class="wxwarn ok">Nothing to plan around: no fog, no rain and nothing over 42°.</div>`}
+    </div>`;
+  }
+
+  function renderTripWeather(activeDay) {
+    if (!RoadbookWeather.has()) return wxShell("Trip weather", wxMissing());
     const rows = DAYS.map(d => {
       const r = weatherRows(d).filter(x => x.wx);
       return { day: d, meta: ROUTE.days[d], span: RoadbookWeather.span(r), warns: RoadbookWeather.warnings(r) };
     });
-    const any = rows.some(r => r.span);
-    if (!any) {
-      return `<div class="wx"><div class="wxhd"><span>Trip weather</span><span class="grow"></span>
-        <button class="btn ghost" id="wxGet">Reload</button></div>
-        <p class="tiny muted" style="margin:0 12px 10px">The stored forecast doesn't reach these dates.
-        Forecasts run about 16 days ahead — reload closer to the trip.</p></div>`;
+    if (!rows.some(r => r.span)) {
+      return wxShell("Trip weather",
+        `<p class="tiny muted" style="margin:0 12px 10px">The stored forecast doesn't reach these
+         dates. Forecasts run about 16 days ahead — reload closer to the trip.</p>`);
     }
     return `<div class="wx">
       <div class="wxhd"><span>Trip weather</span><span class="grow"></span>
@@ -286,7 +323,7 @@ const RoadbookSheet = (function () {
     const dep = parse(state.depart[day]) ?? parse(meta.depart);
     const date = meta.date;
 
-    let h = renderTripWeather(day) + `<div class="ctrl">
+    let h = renderDayWeather(day) + `<div class="ctrl">
       <label for="dep-${day}">Depart</label>
       <input type="time" id="dep-${day}" value="${state.depart[day]}">
       <button class="btn ghost" data-reset="${day}">Reset</button>
@@ -400,6 +437,9 @@ const RoadbookSheet = (function () {
   function renderPrep() {
     const totalKm = DAYS.reduce((t, d) => t + dayKm(d), 0);
     return `
+    <h2>Weather, whole trip</h2>
+    ${renderTripWeather(null)}
+
     <h2>Offline basemap</h2>
     <div class="card">
       <p class="tiny" style="margin-top:0">Caches the road corridor and the area around every stop, so the map behind this sheet keeps working when the data drops. The return uses the same road, so this covers both directions. Do it on wifi before you leave.</p>

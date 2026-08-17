@@ -48,7 +48,7 @@ standalone app and keeps its caches.
 
 Two caches, on purpose:
 
-- `roadbook-shell-v6` — app code. Versioned, wiped on every deploy. Bump `VERSION`
+- `roadbook-shell-v7` — app code. Versioned, wiped on every deploy. Bump `VERSION`
   in `sw.js` when you change any shell file.
 - `roadbook-tiles` — **unversioned and never wiped on activate.** Re-downloading
   several thousand tiles in the desert because you shipped a CSS fix is not a
@@ -149,9 +149,11 @@ same day, 400 km apart. So the forecast is fetched **per stop** and read at the
 hour the schedule puts you there. Change the departure time and every reading
 moves with it.
 
-Two levels: a **trip summary** at the top of every day — one row per day with its
-temperature range and worst hazard, tap to jump — and the **per-stop conditions**
-inside each stop card, with a temperature on the collapsed row.
+Three levels, each where it is useful. The **day view** opens with that day only:
+range, conditions, warmest and coolest point, and the full text of any warning.
+**Each stop card** carries its own conditions, with a temperature on the
+collapsed row. The **whole-trip table** — one row per day, tap to jump — lives in
+Prep, because comparing six days is planning, not driving.
 
 Open-Meteo, keyless and CORS-enabled; all 28 places come back in one request.
 Cached in `localStorage` (~16 KB) rather than the Cache API, so clearing tiles
