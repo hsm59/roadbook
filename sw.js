@@ -7,7 +7,7 @@
              option. Cleared only when the user asks.
    ============================================================ */
 
-const VERSION     = "v8";
+const VERSION     = "v9";
 const SHELL_CACHE = "roadbook-shell-" + VERSION;
 const TILE_CACHE  = "roadbook-tiles";        // intentionally unversioned
 
@@ -60,11 +60,20 @@ function placeholderTile() {
 }
 
 /* ---------------------------- install ---------------------------- */
+/* No skipWaiting here. A new build installs into its own cache and then sits
+   in `waiting` until the page asks for it, so the shell never swaps out from
+   under a tile download or a half-read roadbook. The Prep tab drives it. */
 self.addEventListener("install", function (event) {
   event.waitUntil(
-    caches.open(SHELL_CACHE)
-      .then(function (cache) { return cache.addAll(SHELL_ASSETS); })
-      .then(function () { return self.skipWaiting(); })
+    caches.open(SHELL_CACHE).then(function (cache) {
+      /* cache:"reload" bypasses the browser's own HTTP cache. Without it a
+         new worker can install stale copies of the very files it exists to
+         replace: GitHub Pages serves the shell with its own max-age and
+         gives us no way to send no-cache there the way nginx does. */
+      return cache.addAll(SHELL_ASSETS.map(function (url) {
+        return new Request(url, { cache: "reload" });
+      }));
+    })
   );
 });
 
@@ -161,6 +170,9 @@ self.addEventListener("message", function (event) {
       .then(function () { reply({ ok: true }); })
       .catch(function () { reply({ ok: false }); });
   }
+
+  /* Reported in the Prep tab so a stuck device can be identified by build. */
+  if (msg.type === "VERSION") reply({ version: VERSION });
 
   if (msg.type === "SKIP_WAITING") self.skipWaiting();
 });

@@ -527,6 +527,16 @@ const RoadbookSheet = (function () {
     <div class="card">
       ${ROUTE.contacts.map(c => `<a class="tel" href="tel:${c.tel}"><span>${esc(c.who)}${c.sub ? `<em>${esc(c.sub)}</em>` : ""}</span><b>${esc(c.show)}</b></a>`).join("")}
     </div>
+    <h2>App version</h2>
+    <div class="card">
+      <div class="row"><span>Running build</span><span id="verNow">checking…</span></div>
+      <div class="acts" style="margin-top:12px">
+        <button class="btn" id="btnUpd">Check for update</button>
+      </div>
+      <div class="tiny muted" id="updStat" style="margin-top:8px">&nbsp;</div>
+      <p class="tiny muted" style="margin:10px 0 0">Updating swaps the app code and reloads. Your cached basemap, satellite imagery and ticked checklists are not touched. Needs a connection — there is nothing to fetch out on the road.</p>
+    </div>
+
     <div class="foot">Cached tiles and imagery need no network<br>Everything on this page works with the SIM off</div>`;
   }
 
@@ -694,10 +704,51 @@ const RoadbookSheet = (function () {
       await SAT.clear(); satBar.style.width = "0"; satStat.textContent = "Imagery cleared.";
     };
 
+    wireUpdate();
+
     $$("[data-chk]").forEach(c => c.addEventListener("change", () => {
       const id = c.dataset.chk, m = store.get(id, {});
       m[c.dataset.i] = c.checked; store.set(id, m);
     }));
+  }
+
+  /* Prep is re-rendered every time the tab is opened, so the previous
+     subscription has to go or they stack up and paint a dead button. */
+  let updOff = null;
+
+  function wireUpdate() {
+    const btn = $("#btnUpd"), stat = $("#updStat");
+
+    RoadbookUpdate.version().then(v => { $("#verNow").textContent = v || "unknown"; });
+
+    const paint = s => {
+      const ready = s === "ready";
+      btn.textContent = ready ? "Update and reload" : "Check for update";
+      btn.classList.toggle("primary", ready);
+      btn.disabled = s === "checking" || s === "unsupported";
+      if (ready)                     stat.textContent = "A newer version is installed and waiting.";
+      else if (s === "checking")     stat.textContent = "Checking…";
+      else if (s === "current")      stat.textContent = "This is the latest version.";
+      else if (s === "unsupported")  stat.textContent = "This browser can't self-update the app.";
+      else if (s === "error")        stat.textContent = "Couldn't reach the server.";
+      else                           stat.innerHTML = "&nbsp;";
+    };
+
+    if (updOff) updOff();
+    updOff = RoadbookUpdate.onState(paint);
+
+    btn.onclick = () => {
+      if (RoadbookUpdate.state() === "ready") {
+        stat.textContent = "Updating…";
+        btn.disabled = true;
+        RoadbookUpdate.apply();
+        return;
+      }
+      if (!navigator.onLine) { stat.textContent = "You're offline. Connect first."; return; }
+      btn.disabled = true;
+      stat.textContent = "Checking…";
+      RoadbookUpdate.check().then(paint);
+    };
   }
 
   /* ---------------- map coupling ---------------- */

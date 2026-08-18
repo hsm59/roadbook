@@ -46,6 +46,15 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 .tiny{font-size:11.5px;line-height:1.55}
 .muted{color:var(--dim)}
 
+/* update banner — above the sheet, since it must be reachable at any detent */
+#update{position:fixed;left:12px;right:12px;z-index:1300;
+  top:calc(12px + env(safe-area-inset-top));
+  display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+  background:var(--panel2);border:1px solid var(--amber);border-radius:10px;
+  padding:10px 12px;box-shadow:0 6px 24px rgba(0,0,0,.5)}
+#update[hidden]{display:none}
+#update span{flex:1;min-width:140px;font-size:12.5px;line-height:1.4}
+
 /* floating map controls, above the sheet */
 #mapbtns{position:fixed;right:12px;z-index:1100;display:flex;flex-direction:column;
   align-items:flex-end;gap:8px;
@@ -271,6 +280,12 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
   <div id="net">…</div>
 </header>
 
+<div id="update" hidden>
+  <span id="updateMsg">A newer version is ready.</span>
+  <button class="btn primary" id="btnUpdateNow">Update</button>
+  <button class="btn ghost" id="btnUpdateLater">Later</button>
+</div>
+
 <div id="map"></div>
 
 <div id="mapbtns">
@@ -299,15 +314,153 @@ h1 small{display:block;font-family:var(--mono);font-size:10.5px;color:var(--dim)
 (function () {
   "use strict";
 
-  /* ---------- 1. register the service worker ---------- */
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", function () {
-      navigator.serviceWorker.register("./sw.js")
-        .catch(function (e) { console.warn("SW registration failed:", e); });
+  /* ---------- 1. service worker + update control ----------
+     The worker no longer takes over on its own (see sw.js install). A new
+     build installs quietly and waits; nothing changes under the driver until
+     someone taps Update. Exposed as RoadbookUpdate so the Prep tab can drive
+     the same state machine as the banner. */
+  window.RoadbookUpdate = (function () {
+    var supported = "serviceWorker" in navigator;
+    var reg = null, listeners = [], reloading = false;
+    /* Was this page already under a worker at startup? If not, the first
+       controllerchange is just the initial install claiming the page, and
+       reloading on it would bounce every first-time visitor. */
+    var hadController = supported && !!navigator.serviceWorker.controller;
+    var state = supported ? "unknown" : "unsupported";
+
+    function set(s) {
+      if (s === state) return;
+      state = s;
+      listeners.forEach(function (fn) { try { fn(s); } catch (e) {} });
+    }
+
+    /* A worker parked in `waiting` is a build that installed but has not been
+       let in. That — not merely "sw.js changed on the server" — is the thing
+       we can actually apply, so it is the only thing we call an update. */
+    function scan() {
+      if (!reg) return;
+      if (reg.waiting && hadController) set("ready");
+      else if (reg.installing) set("checking");
+      else set("current");
+    }
+
+    function watch(worker) {
+      if (worker) worker.addEventListener("statechange", scan);
+    }
+
+    function check() {
+      if (!reg) return Promise.resolve(state);
+      if (!navigator.onLine) return Promise.resolve(state);
+      return reg.update().then(function () { scan(); return state; })
+                         .catch(function () { set("error"); return state; });
+    }
+
+    function apply() {
+      if (!reg || !reg.waiting) return false;
+      /* The reload is driven by controllerchange below, not from here: the
+         new worker has to finish activating before the page reloads, or the
+         reload just re-runs the old shell. */
+      reg.waiting.postMessage({ type: "SKIP_WAITING" });
+      return true;
+    }
+
+    /* Which build is actually serving this page, for the Prep tab readout.
+       On a first visit the page is not controlled yet, so fall back to the
+       registration's active worker — it answers just as well and saves the
+       readout from saying "unknown" on the one load where it looks alarming. */
+    function version() {
+      if (!supported) return Promise.resolve(null);
+      var settled = false;
+      return new Promise(function (resolve) {
+        var give = function (v) { if (!settled) { settled = true; resolve(v); } };
+        setTimeout(function () { give(null); }, 2500);
+
+        navigator.serviceWorker.ready.then(function (r) {
+          var sw = navigator.serviceWorker.controller || r.active;
+          if (!sw) return give(null);
+          var ch = new MessageChannel();
+          ch.port1.onmessage = function (ev) {
+            give((ev.data && ev.data.version) || null);
+          };
+          sw.postMessage({ type: "VERSION" }, [ch.port2]);
+        }).catch(function () { give(null); });
+      });
+    }
+
+    function onState(fn) {
+      listeners.push(fn);
+      fn(state);
+      return function () {
+        var i = listeners.indexOf(fn);
+        if (i !== -1) listeners.splice(i, 1);
+      };
+    }
+
+    function init() {
+      if (!supported) {
+        console.warn("No service worker support — offline tiles will not work.");
+        return;
+      }
+
+      navigator.serviceWorker.register("./sw.js").then(function (r) {
+        reg = r;
+        watch(r.installing);
+        watch(r.waiting);
+        r.addEventListener("updatefound", function () { watch(r.installing); scan(); });
+        scan();
+        check();
+      }).catch(function (e) {
+        console.warn("SW registration failed:", e);
+        set("error");
+      });
+
+      /* Browsers re-fetch sw.js on their own schedule, which can be as slow as
+         once a day. Nudge it whenever the app comes back to the foreground —
+         cheap, and it means a deploy is usually noticed on the next glance. */
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) check();
+      });
+      window.addEventListener("online", check);
+      setInterval(check, 3600000);
+
+      navigator.serviceWorker.addEventListener("controllerchange", function () {
+        if (!hadController || reloading) return;
+        reloading = true;
+        location.reload();
+      });
+    }
+
+    return {
+      init: init,
+      check: check,
+      apply: apply,
+      version: version,
+      onState: onState,
+      state: function () { return state; }
+    };
+  })();
+
+  RoadbookUpdate.init();
+
+  /* The banner is the passive half: it appears only once a build is sitting
+     ready, and "Later" silences it until the next reload. The Prep tab keeps
+     the explicit control for anyone who dismissed it. */
+  (function () {
+    var bar = document.getElementById("update");
+    var dismissed = false;
+    RoadbookUpdate.onState(function (s) {
+      bar.hidden = dismissed || s !== "ready";
     });
-  } else {
-    console.warn("No service worker support — offline tiles will not work.");
-  }
+    document.getElementById("btnUpdateNow").onclick = function () {
+      document.getElementById("updateMsg").textContent = "Updating…";
+      this.disabled = true;
+      RoadbookUpdate.apply();
+    };
+    document.getElementById("btnUpdateLater").onclick = function () {
+      dismissed = true;
+      bar.hidden = true;
+    };
+  })();
 
   /* ---------- 2. map + sheet ---------- */
   RoadbookMap.init("map");

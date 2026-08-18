@@ -34,6 +34,19 @@ jobs:
           cp manifest.webmanifest icon.svg .nojekyll _site/
           cp -R vendor downloads _site/
 
+      # The shell cache is keyed on VERSION. Ship two deploys with the same
+      # value and the second installs into the cache that already exists, so
+      # every device keeps serving the old code and nothing — not the browser,
+      # not the update button — can tell that a new build happened. Stamping
+      # the commit makes that impossible to forget.
+      - name: Stamp the build version into the service worker
+        run: |
+          set -euo pipefail
+          sed -i -E "s/^const VERSION[[:space:]]*=.*$/const VERSION     = \"${GITHUB_SHA::7}\";/" _site/sw.js
+          grep -q "const VERSION     = \"${GITHUB_SHA::7}\";" _site/sw.js \
+            || { echo "VERSION was not stamped — has the line in sw.js been reformatted?"; exit 1; }
+          grep -n "const VERSION" _site/sw.js
+
       - name: Check the service worker can cache everything it lists
         run: node .github/scripts/check-shell-assets.mjs _site
 

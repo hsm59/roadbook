@@ -129,4 +129,9 @@ None of this touches the map tiles — those live in Cache Storage, managed by
 3. **Offline maps → Download.** On wifi. ~3,500 tiles, ~125 MB.
 4. Flight mode, force-quit, reopen. If the tiles draw, you're ready.
 
+To pick up a later deploy on a phone that already has the app installed, open
+**Prep → App version → Check for update**. Nothing updates without that tap (or
+the banner it raises), so a deploy mid-trip cannot change the app under you at a
+junction. The check needs a connection; the rest of the app does not.
+
 Do step 4 in Dubai. Finding out at Ghaba is not the moment.
