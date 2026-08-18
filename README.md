@@ -53,11 +53,26 @@ standalone app and keeps its caches.
 
 Two caches, on purpose:
 
-- `roadbook-shell-v8` — app code. Versioned, wiped on every deploy. Bump `VERSION`
-  in `sw.js` when you change any shell file.
+- `roadbook-shell-<version>` — app code. Versioned, wiped on activate. CI stamps
+  `VERSION` in `sw.js` with the commit SHA at deploy time, so you no longer have
+  to remember to bump it; the literal in the file is only used by local builds.
 - `roadbook-tiles` — **unversioned and never wiped on activate.** Re-downloading
   several thousand tiles in the desert because you shipped a CSS fix is not a
   thing that should be able to happen. Cleared only when the user taps Clear.
+
+## How updating works
+
+A new build installs into its own shell cache and then **waits**. It does not
+take over on its own — swapping the shell out from under a running tile
+download, or mid-roadbook at a junction, is not worth the freshness.
+
+The page checks for one on load, whenever it returns to the foreground, when the
+connection comes back, and hourly. When a build is sitting ready you get a banner
+at the top, and **Prep → App version** shows the running build with a
+**Check for update** button. Either one applies it and reloads.
+
+Only `roadbook-shell-*` is replaced. The tile cache, the satellite imagery in
+IndexedDB and the ticked checklists all survive an update.
 
 ## Why the precache is a corridor, not a bounding box
 

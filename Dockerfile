@@ -20,6 +20,18 @@ COPY manifest.webmanifest icon.svg ./
 COPY vendor/ ./vendor/
 COPY downloads/ ./downloads/
 
+# The service worker's shell cache is keyed on VERSION, so two images built
+# from different commits must not carry the same one — a repeated value leaves
+# every installed device serving the old code with no way to notice. CI passes
+# the commit; a local `docker build` falls back to whatever sw.js already says.
+ARG APP_VERSION=""
+RUN if [ -n "$APP_VERSION" ]; then \
+      sed -i -E "s/^const VERSION[[:space:]]*=.*$/const VERSION     = \"${APP_VERSION}\";/" sw.js \
+      && grep -q "const VERSION     = \"${APP_VERSION}\";" sw.js \
+      || { echo "VERSION was not stamped into sw.js"; exit 1; } ; \
+    fi \
+ && grep -n "const VERSION" sw.js
+
 # Precompress everything worth compressing. -k keeps the original so nginx can
 # still serve clients that don't send Accept-Encoding.
 RUN find . -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' \
